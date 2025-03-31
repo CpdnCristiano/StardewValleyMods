@@ -1,0 +1,10 @@
+{
+  "Name": "Fix Warp Greenhouses",
+  "Author": "CpdnCristiano",
+  "Version": "1.0.2",
+  "Description": "Fixes the warp to the greenhouse in more greenhouses",
+  "UniqueID": "CpdnCristiano.FixWarpGreenhouses",
+  "EntryDll": "FixWarpGreenhouses.dll",
+  "MinimumApiVersion": "2.9",
+  "UpdateKeys": ["Nexus:31481"]
+}
