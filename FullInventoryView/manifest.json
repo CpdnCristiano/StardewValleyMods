@@ -1,10 +1,12 @@
 {
   "Name": "Full Inventory View",
   "Author": "CpdnCristiano",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "MinimumApiVersion": "4.1.10",
   "Description": "This mod lets you view all inventory rows at once, removing the need to scroll.",
   "UniqueID": "CpdnCristiano.FullInventoryView",
   "EntryDll": "FullInventoryView.dll",
-  "UpdateKeys": ["Nexus:32625"]
+  "UpdateKeys": [
+    "Nexus:32625"
+  ]
 }

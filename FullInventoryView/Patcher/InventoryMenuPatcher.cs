@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.Inventories;
 using StardewValley.Menus;
 using static StardewValley.Menus.InventoryMenu;
 
@@ -77,6 +78,28 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                     new Type[] { typeof(int), typeof(int), typeof(int), typeof(int) }
                 ),
                 prefix: this.GetHarmonyMethod(nameof(InventoryPagePrefix))
+            );
+            harmony.Patch(
+                original: this.RequireMethod<IClickableMenu>(
+                    nameof(IClickableMenu.isWithinBounds),
+                    new Type[] { typeof(int), typeof(int) }
+                ),
+                prefix: this.GetHarmonyMethod(nameof(isWithinBoundsPrefix))
+            );
+            harmony.Patch(
+                original: this.RequireConstructor<CraftingPage>(
+                    new Type[]
+                    {
+                        typeof(int),
+                        typeof(int),
+                        typeof(int),
+                        typeof(int),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(List<IInventory>),
+                    }
+                ),
+                prefix: this.GetHarmonyMethod(nameof(CraftingPagePrefix))
             );
 
             MethodInfo method = typeof(IClickableMenu).GetMethod(
@@ -184,6 +207,22 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             }
         }
 
+        static bool isWithinBoundsPrefix(
+            IClickableMenu __instance,
+            ref bool __result,
+            int x,
+            ref int y
+        )
+        {
+            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS && __instance is InventoryPage)
+            {
+                int extraSpace = GetExtraHeight();
+                y += extraSpace;
+            }
+
+            return true;
+        }
+
         private static void iClickableMenuPrefix(
             IClickableMenu __instance,
             ref int y,
@@ -267,6 +306,15 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             {
                 int extraSpace = GetExtraHeight();
                 y += extraSpace;
+                height += extraSpace;
+            }
+        }
+
+        private static void CraftingPagePrefix(ref int y, ref int height)
+        {
+            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            {
+                int extraSpace = GetExtraHeight();
                 height += extraSpace;
             }
         }
