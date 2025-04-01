@@ -127,6 +127,10 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                 original: this.RequireMethod<ShopMenu>(nameof(ShopMenu.updatePosition)),
                 postfix: this.GetHarmonyMethod(nameof(updatePositionPostfix))
             );
+            harmony.Patch(
+                original: this.RequireMethod<ShopMenu>(nameof(ShopMenu.drawCurrency)),
+                prefix: this.GetHarmonyMethod(nameof(drawCurrencyPrefix))
+            );
 
             harmony.Patch(
                 original: this.RequireMethod<ItemGrabMenu>(
@@ -141,6 +145,44 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                 ),
                 transpiler: this.GetHarmonyMethod(nameof(drawTranspiler))
             );
+        }
+
+        private static bool drawCurrencyPrefix(ShopMenu __instance, SpriteBatch b)
+        {
+            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            {
+                FieldInfo? _isStorageShopField = typeof(ShopMenu).GetField(
+                    "_isStorageShop",
+                    BindingFlags.NonPublic | BindingFlags.Instance
+                );
+
+                if (_isStorageShopField == null)
+                {
+                    Log.Error("Field '_isStorageShop' not found in ShopMenu.");
+                    return true;
+                }
+                var isStorageShop = _isStorageShopField?.GetValue(__instance) as bool? ?? false;
+                if (!isStorageShop && __instance.currency == 0)
+                {
+                    var extraHeight =
+                        GetExtraHeight() - ((GetExtraRow() - 1) * IClickableMenu.spaceBetweenTabs);
+                    if (extraHeight < 0)
+                    {
+                        extraHeight = 0;
+                    }
+                    Game1.dayTimeMoneyBox.drawMoneyBox(
+                        b,
+                        __instance.xPositionOnScreen - 36,
+                        __instance.yPositionOnScreen
+                            + __instance.height
+                            - __instance.inventory.height
+                            - 12
+                            + extraHeight
+                    );
+                }
+                return false;
+            }
+            return true;
         }
 
         public static IEnumerable<CodeInstruction> drawTranspiler(
@@ -176,21 +218,6 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                 }
             }
             return codes;
-        }
-
-        private static bool drawTextureBoxPrefix(ref Rectangle sourceRect, ref int height)
-        {
-            var rectToCompare = new Rectangle(384, 373, 18, 18);
-            if (
-                sourceRect == rectToCompare
-                && height < 350
-                && Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS
-                && Game1.activeClickableMenu is ShopMenu
-            )
-            {
-                height += GetExtraHeight() + 32;
-            }
-            return true;
         }
 
         private static void initializeShippingBinPostfix(ItemGrabMenu __instance)
