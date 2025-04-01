@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using CpdnCristiano.StardewValleyMods.Common.Log;
 using CpdnCristiano.StardewValleyMods.Common.Patching;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
@@ -41,7 +42,7 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             return rows > DEFAULT_ROW_COUNT ? (rows - DEFAULT_ROW_COUNT) : 0;
         }
 
-        private static int GetExtraHeight()
+        public static int GetExtraHeight()
         {
             return (GetExtraRow() * DEFAULT_ROW_HEIGHT)
                 + ((GetExtraRow() - 1) * IClickableMenu.spaceBetweenTabs);
@@ -146,34 +147,35 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             IEnumerable<CodeInstruction> instructions
         )
         {
-            var code = new List<CodeInstruction>(instructions);
+            var codes = new List<CodeInstruction>(instructions);
 
-            for (int i = 0; i < code.Count - 5; i++)
+            for (int i = 0; i < codes.Count - 5; i++)
             {
                 if (
-                    code[i].opcode == OpCodes.Ldarg_0
-                    && code[i + 1].opcode == OpCodes.Ldfld
-                    && ((FieldInfo)code[i + 1].operand).Name == "height"
-                    && code[i + 2].opcode == OpCodes.Ldc_I4
-                    && (int)code[i + 2].operand == 448
-                    && code[i + 3].opcode == OpCodes.Sub
-                    && code[i + 4].opcode == OpCodes.Ldc_I4_S
-                    && (sbyte)code[i + 4].operand == 20
-                    && code[i + 5].opcode == OpCodes.Add
+                    codes[i].opcode == OpCodes.Ldarg_0
+                    && codes[i + 1].opcode == OpCodes.Ldfld
+                    && ((FieldInfo)codes[i + 1].operand).Name == "height"
+                    && codes[i + 2].opcode == OpCodes.Ldc_I4
+                    && (int)codes[i + 2].operand == 448
+                    && codes[i + 3].opcode == OpCodes.Sub
+                    && codes[i + 4].opcode == OpCodes.Ldc_I4_S
+                    && (sbyte)codes[i + 4].operand == 20
+                    && codes[i + 5].opcode == OpCodes.Add
                 )
                 {
-                    code.Insert(
+                    codes.Insert(
                         i + 6,
                         new CodeInstruction(
                             OpCodes.Call,
                             AccessTools.Method(typeof(InventoryMenuPatcher), nameof(GetExtraHeight))
                         )
                     );
-                    code.Insert(i + 7, new CodeInstruction(OpCodes.Add));
+                    codes.Insert(i + 7, new CodeInstruction(OpCodes.Add));
+                    Log.Debug("Patching ShopMenu to add extra height to the shop menu");
                     break;
                 }
             }
-            return code;
+            return codes;
         }
 
         private static bool drawTextureBoxPrefix(ref Rectangle sourceRect, ref int height)
@@ -305,8 +307,8 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
             {
                 int extraSpace = GetExtraHeight();
-                y += extraSpace;
                 height += extraSpace;
+                y += extraSpace;
             }
         }
 

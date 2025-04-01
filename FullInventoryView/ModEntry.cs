@@ -9,8 +9,12 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView
     {
         public override void Entry(IModHelper helper)
         {
-            Log.Init(this.Monitor);
+            Log.Init(Monitor);
             var patches = new List<IPatcher> { new InventoryMenuPatcher() };
+            if (Helper.ModRegistry.IsLoaded("Annosz.UiInfoSuite2"))
+            {
+                patches.Add(new UiInfo2Patcher());
+            }
             HarmonyPatcher.Apply(this, patches.ToArray());
         }
     }
