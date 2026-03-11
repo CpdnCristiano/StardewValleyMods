@@ -53,6 +53,14 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             return GetRows() * DEFAULT_COLUMN_COUNT;
         }
 
+        public static int GetBillboardOffset()
+        {
+            int extra = GetExtraHeight();
+            if (extra <= 0) return 0;
+
+            return extra - 64;
+        }
+
         public override void Apply(Harmony harmony, IMonitor monitor)
         {
             harmony.Patch(

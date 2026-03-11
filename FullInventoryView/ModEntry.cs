@@ -15,6 +15,10 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView
             {
                 patches.Add(new UiInfo2Patcher());
             }
+            else if (Helper.ModRegistry.IsLoaded("DazUki.UIInfoSuite2Alt"))
+            {
+                patches.Add(new UiInfo2AltPatcher());
+            }
             HarmonyPatcher.Apply(this, patches.ToArray());
         }
     }
