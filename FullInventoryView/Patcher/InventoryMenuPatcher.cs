@@ -58,7 +58,7 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             int extra = GetExtraHeight();
             if (extra <= 0) return 0;
 
-            return extra - 64;
+            return extra - DEFAULT_ROW_HEIGHT;
         }
 
         public override void Apply(Harmony harmony, IMonitor monitor)

@@ -26,7 +26,7 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
 
             for (int i = 0; i < codes.Count - 3; i++)
             {
-                if (codes[i].opcode == OpCodes.Ldfld && ((FieldInfo)codes[i].operand).Name == "height" &&
+                if (codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo fieldInfo && fieldInfo.Name == "height" &&
                     codes[i + 1].opcode == OpCodes.Add &&
                     codes[i + 3].opcode == OpCodes.Sub)
                 {
