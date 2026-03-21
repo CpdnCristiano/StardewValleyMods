@@ -20,7 +20,7 @@ internal static class PatchHelper
     {
         return AccessTools.Constructor(typeof(TTarget), parameters)
             ?? throw new InvalidOperationException(
-                $"Can't find constructor {PatchHelper.GetMethodString(typeof(TTarget), null, parameters)} to patch."
+                $"Can't find constructor {GetMethodString(typeof(TTarget), null, parameters)} to patch."
             );
     }
 
@@ -38,7 +38,7 @@ internal static class PatchHelper
     {
         return AccessTools.Method(typeof(TTarget), name, parameters, generics)
             ?? throw new InvalidOperationException(
-                $"Can't find method {PatchHelper.GetMethodString(typeof(TTarget), name, parameters, generics)} to patch."
+                $"Can't find method {GetMethodString(typeof(TTarget), name, parameters, generics)} to patch."
             );
     }
 
@@ -67,7 +67,7 @@ internal static class PatchHelper
         }
 
         // generics
-        if (generics?.Any() == true)
+        if (generics?.Length > 0)
         {
             str.Append('<');
             str.Append(string.Join(", ", generics.Select(p => p.FullName)));
@@ -75,7 +75,7 @@ internal static class PatchHelper
         }
 
         // parameters
-        if (parameters?.Any() == true)
+        if (parameters?.Length > 0)
         {
             str.Append('(');
             str.Append(string.Join(", ", parameters.Select(p => p.FullName)));

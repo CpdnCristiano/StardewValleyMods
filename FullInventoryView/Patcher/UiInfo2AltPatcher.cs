@@ -14,6 +14,11 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             var original = AccessTools.Method(
                 "UIInfoSuite2Alt.UIElements.ShowCalendarAndBillboardOnGameMenuButton:DrawBillboard"
             );
+            if (original is null)
+            {
+                monitor.Log("Could not find UIInfoSuite2Alt DrawBillboard method; skipping patch.", LogLevel.Warn);
+                return;
+            }
             harmony.Patch(
                 original: original,
                 transpiler: this.GetHarmonyMethod(nameof(drawBillboardTranspiler))
