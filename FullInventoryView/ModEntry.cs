@@ -1,9 +1,9 @@
-using CpdnCristiano.StardewValleyMods.Common.Log;
-using CpdnCristiano.StardewValleyMods.Common.Patching;
-using CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher;
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.FullInventoryView;
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView;
 
 public class ModEntry : Mod
 {

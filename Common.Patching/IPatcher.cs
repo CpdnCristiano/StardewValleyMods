@@ -1,7 +1,7 @@
 using HarmonyLib;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.Common.Patching;
+namespace CpdnCristiano.StardewValleyMod.Common.Patching;
 
 /// <summary>A set of Harmony patches to apply.</summary>
 internal interface IPatcher

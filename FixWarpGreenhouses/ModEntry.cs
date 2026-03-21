@@ -1,8 +1,8 @@
-using CpdnCristiano.StardewValleyMods.Common.Patching;
-using CpdnCristiano.StardewValleyMods.FixWarpGreenhouses.Patcher;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FixWarpGreenhouses.Patcher;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.FixWarpGreenhouses;
+namespace CpdnCristiano.StardewValleyMod.FixWarpGreenhouses;
 
 public class ModEntry : Mod
 {

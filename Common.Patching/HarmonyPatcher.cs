@@ -2,7 +2,7 @@ using System;
 using HarmonyLib;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.Common.Patching;
+namespace CpdnCristiano.StardewValleyMod.Common.Patching;
 
 /// <summary>Simplifies applying <see cref="IPatcher"/> instances to the game.</summary>
 internal static class HarmonyPatcher

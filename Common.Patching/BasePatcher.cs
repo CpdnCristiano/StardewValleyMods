@@ -3,7 +3,7 @@ using System.Reflection;
 using HarmonyLib;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.Common.Patching;
+namespace CpdnCristiano.StardewValleyMod.Common.Patching;
 
 /// <summary>Provides base implementation logic for <see cref="IPatcher"/> instances.</summary>
 internal abstract class BasePatcher : IPatcher

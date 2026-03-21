@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using CpdnCristiano.StardewValleyMods.Common.Log;
-using CpdnCristiano.StardewValleyMods.Common.Patching;
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -11,7 +11,7 @@ using StardewValley.Inventories;
 using StardewValley.Menus;
 using static StardewValley.Menus.InventoryMenu;
 
-namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
     internal class InventoryMenuPatcher : BasePatcher
     {
