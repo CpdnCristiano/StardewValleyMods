@@ -3,7 +3,7 @@
     <PropertyGroup Label="Globals">
         <ProjectGuid>a45b2a8e-7c14-4cab-89eb-91ad916bb8d6</ProjectGuid>
         <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
-        <RootNamespace>CpdnCristiano.StardewValleyMods.Common.Log</RootNamespace>
+        <RootNamespace>CpdnCristiano.StardewValleyMod.Common.Log</RootNamespace>
     </PropertyGroup>
     <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
         Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
