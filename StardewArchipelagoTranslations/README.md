@@ -1,16 +1,15 @@
 # Stardew Archipelago Translations
 
-A high-performance, premium, and standalone multilingual localization and patcher mod for [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago).
+A standalone multilingual localization and patcher mod for [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago).
 
-This mod utilizes Harmony patches to intercept, translate, and augment core StardewArchipelago behaviors in real-time, providing players with beautiful localized content, custom i18n rules, and an advanced modular mail translation system.
+This mod utilizes Harmony patches to translate and customize core StardewArchipelago behaviors, providing players with localized content, custom i18n rules, and a modular category-based mail system.
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 ### 1. Granular Modular Mail System
-Tired of generic mails (like Hat Mouse or Burger King jokes) showing up on every item? This mod introduces a granular category-based mail system. 
-Mails are loaded dynamically based on the item's category from `templates/mail/{locale}/{category}.json`. Supported categories include:
+Mails are loaded dynamically based on the item's category from `templates/mail/{locale}/{category}.json`. This allows custom templates per category, rather than using a single pool. Supported categories include:
 *   ⚔️ **`weapon`**: Swords, daggers, hammers, clubs, gauntlets, and other combat items.
 *   🪓 **`tool`**: Axes, pickaxes, hoes, watering cans, fishing rods, trash cans, and specialized equipment.
 *   💍 **`ring`**: Rings, bands, amulets, and special accessories.
@@ -20,27 +19,26 @@ Mails are loaded dynamically based on the item's category from `templates/mail/{
 *   🍰 **`food`**: Edibles, ingredients, crops, and cooking recipes.
 *   📦 **`default`**: Fallback generic templates.
 
-### 2. 🍲 Food Dynamic Stats (`{{energy}}` & `{{health}}`)
-Food items now have **exclusive template variables**! The mod dynamically reads the Stardew Valley `Edibility` index of incoming crops or cooked foods and calculates their exact **Energy** and **Health** restoration stats in real-time:
-*   Use `{{energy}}` and `{{health}}` anywhere in your custom food mail templates to render real-time values, like:
+### 2. Food Dynamic Stats (`{{energy}}` & `{{health}}`)
+Food items have template variables. The mod reads the Stardew Valley `Edibility` index of incoming crops or cooked foods and calculates their Energy and Health restoration stats in real-time:
+*   Use `{{energy}}` and `{{health}}` anywhere in your custom food mail templates to render these values, like:
     > *"Hey @, I made this fresh {{item}} (+{{energy}} Energy / +{{health}} Health) for you!"*
 
-### 3. 🗺️ Smart Dynamic i18n Replacements
-Translate complex game terms dynamically with elegant placeholders, including:
+### 3. Dynamic i18n Replacements
+Translate complex game terms dynamically with placeholders, including:
 *   **Progressive Upgrades**: `"buildings.free.name": "{{name}} (grátis)"` (Portuguese) or `Free {{name}}` (English).
 *   **Skill Formats**: Custom templates for skill-level unlocks, recipes, and dynamic location rewards.
 
-### 4. ⚡ Extreme Optimization
-Built for professional performance:
-*   **Dynamic Cache Mapping**: All item, location, bundle, and description lookups are heavily cached to guarantee **zero gameplay stutter**.
-*   **Background Pre-Scouting**: Automatically queries the Archipelago server for location data in a non-blocking background thread as soon as the save is loaded. **This completely eliminates the menu-open lag** experienced in large shops!
-*   **Ultra-light memory footprint**: Runs a custom real-time memory monitor command (`ap_pt_mem`) verifying a physical RAM impact of less than 0.01%!
+### 4. Optimization Details
+*   **Cache Mapping**: Item, location, bundle, and description lookups are cached to prevent gameplay delays.
+*   **Background Pre-Scouting**: Queries the Archipelago server for location data in a background thread upon save load to minimize menu lag in large shops.
+*   **Memory Monitor**: A console command (`ap_pt_mem`) allows you to view the cache entry count and estimated memory footprint.
 
 ---
 
-## 📂 Directory Structure
+## Directory Structure
 
-All translations and customized mail assets are stored inside clean, structured folders:
+All translations and customized mail assets are stored inside structured folders:
 
 ```text
 StardewArchipelagoTranslations/
@@ -59,7 +57,7 @@ StardewArchipelagoTranslations/
 
 ---
 
-## 🛠️ How to Customize Mail Templates
+## How to Customize Mail Templates
 
 To write your own translations or messages:
 1. Go to `templates/mail/{your_locale}/` (create the directory matching your SMAPI locale code if it doesn't exist).
@@ -84,18 +82,11 @@ To write your own translations or messages:
 *   `{{energy}}`: Real-time energy value (available for **`food`** category only).
 *   `{{health}}`: Real-time health value (available for **`food`** category only).
 
-Legacy templates using `{0}`, `{1}`, `{2}`, `{3}` format indexes are also supported out-of-the-box and will automatically resolve with zero compatibility issues!
+Legacy templates using `{0}`, `{1}`, `{2}`, `{3}` format indexes are also supported and resolve automatically.
 
 ---
 
-## 👨‍💻 Commands
+## Commands
 
-Run these useful commands directly in your SMAPI console:
-*   **`ap_pt_mem`**: Evaluates and displays the exact physical RAM size and dynamic cache entry count of the translation mod in real-time.
-
----
-
-## 🤝 Contributing & Support
-
-Maintained with ❤️ by **CpdnCristiano** and contributors.
-Feel free to open a Pull Request to translate terms to other languages by creating a folder under `templates/mail/` and translating `i18n/` entries!
+Run these commands in your SMAPI console:
+*   **`ap_pt_mem`**: Displays the active cache entry count and estimated physical RAM size of the translation mod.
