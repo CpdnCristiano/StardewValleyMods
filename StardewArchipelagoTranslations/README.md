@@ -1,5 +1,8 @@
 # Stardew Archipelago Translations
 
+> [!WARNING]
+> **Status do Projeto**: Este mod de tradução ainda está em **caráter experimental** e **não está 100% concluído**. Este mod **não visa ser publicado** no momento devido ao seu estado de desenvolvimento e testes contínuos. Use por sua conta e risco.
+
 A standalone multilingual localization and patcher mod for [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago).
 
 This mod utilizes Harmony patches to translate and customize core StardewArchipelago behaviors, providing players with localized content, custom i18n rules, and a modular category-based mail system.
