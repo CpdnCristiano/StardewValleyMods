@@ -1,0 +1,15 @@
+{
+  "Name": "Stardew Archipelago Portuguese Translation",
+  "Author": "CpdnCristiano",
+  "Version": "1.0.0",
+  "Description": "Standalone Portuguese translation mod for StardewArchipelago using Harmony patches",
+  "UniqueID": "CpdnCristiano.StardewArchipelagoPT",
+  "EntryDll": "StardewArchipelagoPT.dll",
+  "MinimumApiVersion": "4.0.0",
+  "Dependencies": [
+    {
+      "UniqueID": "KaitoKid.StardewArchipelago",
+      "IsRequired": true
+    }
+  ]
+}

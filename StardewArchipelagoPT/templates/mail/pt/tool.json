@@ -1,0 +1,11 @@
+{
+  "ItemMails": [
+    "Olá @! Encontrei esta útil ferramenta: {{item}}! Estava perdida lá em {{location}}. Tenho certeza que vai facilitar muito o seu trabalho na fazenda {{farm}}!^^    -{{sender}}",
+    "Ei, o Clint me entregou esta {{item}} novinha e pediu para te mandar. Ela veio direto de {{location}}! Suas plantações agradecem.^^    -{{sender}}",
+    "Estava difícil limpar a fazenda {{farm}} sem o equipamento certo, né? Mandei esta {{item}} para te dar uma força!^^    -{{sender}}"
+  ],
+  "GiftMails": [
+    "Precisa de uma mãozinha no trabalho pesado? Mandei esta {{item}} novinha direto do meu mundo em {{game}}!^^    -{{sender}}",
+    "Enviei esta fantástica {{item}} para você acelerar as tarefas diárias! Direto do reino de {{game}}.^^    -{{sender}}"
+  ]
+}

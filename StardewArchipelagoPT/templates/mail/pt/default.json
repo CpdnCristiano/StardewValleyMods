@@ -1,0 +1,19 @@
+{
+  "ItemMails": [
+    "Olá @! Havia um {{item}} em meu {{location}}. Acha que consegue dar alguma utilidade para ele?^^    -{{sender}}",
+    "Ei @, eu estava passando por {{location}} quando encontrei um {{item}}. Você precisa parar de deixar suas coisas espalhadas por aí!^^    -{{sender}}",
+    "Ei @! Um passarinho me contou que você estava procurando por {{item}}. Pois bem, ele caiu direto na minha chaminé em {{location}}!^^    -{{sender}}",
+    "Caro fazendeiro, aqui é o prefeito Lewis. Encontrei este {{item}} perdido perto de {{location}}... prometo que não é nada secreto!^^    -Lewis",
+    "Olá @! Estava limpando meu sótão e achei este {{item}}. Ele veio com uma etiqueta dizendo 'propriedade de {{farm}}'. Aqui está!^^    -{{sender}}",
+    "Alerta de segurança da Joja: Um pacote contendo {{item}} foi extraviado em {{location}} e entregue na sua fazenda por engano. Aproveite!^^    -Representante Joja",
+    "Ei, o Krobus me deu este {{item}} nos esgotos, mas eu não sei o que fazer com isso. Acho que serve para você!^^    -{{sender}}",
+    "Olá! Encontrei um {{item}} dentro de uma geoda que quebrei no ferreiro. O Clint ficou confuso, mas eu enviei para você!^^    -{{sender}}",
+    "Ei! Eu estava revirando o lixo da prefeitura e achei este {{item}}. Não conte para ninguém, mas é todo seu!^^    -{{sender}}",
+    "Para a fazenda {{farm}}: Fui dar uma volta no deserto e achei este {{item}} na areia. Espero que ajude na sua jornada!^^    -{{sender}}",
+    "Ei, achei este {{item}} flutuando com um balão no céu! Usei meu estilingue e consegui pegar para você.^^    -{{sender}}"
+  ],
+  "GiftMails": [
+    "É perigoso ir sozinho. Pegue isto!^^    -{{sender}} de {{game}}",
+    "Um presentinho direto do multiworld para a fazenda {{farm}}: um lindo {{item}}!^^    -{{sender}} de {{game}}"
+  ]
+}

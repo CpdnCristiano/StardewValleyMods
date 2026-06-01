@@ -1,0 +1,10 @@
+{
+  "ItemMails": [
+    "Ei @, veja o que brilha tanto! Este lindo {{item}} estava escondido em {{location}}. Ele vai te dar poderes especiais na fazenda {{farm}}!^^    -{{sender}}",
+    "Mandei este precioso {{item}} para proteger você nas suas aventuras! Ele foi resgatado de {{location}}. Vista-o com orgulho!^^    -{{sender}}"
+  ],
+  "GiftMails": [
+    "Um amuleto protetor de longe! Mandei este {{item}} brilhante para você direto de {{game}}!^^    -{{sender}}",
+    "Estava explorando {{game}} e encontrei este belo {{item}}. Achei a sua cara!^^    -{{sender}}"
+  ]
+}

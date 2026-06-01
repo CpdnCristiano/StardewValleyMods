@@ -1,0 +1,13 @@
+{
+  "ItemMails": [
+    "Ei @, preparei este delicioso {{item}} fresquinho para você! Ele recupera {{energy}} de Energia e {{health}} de Vida. Só não coma tudo de uma vez para não ter dor de barriga!^^    -{{sender}}",
+    "Espero que este {{item}} (+{{energy}} Energia!) seja muito mais saboroso do que a sopa misteriosa do Luau deste ano! Enviei direto de {{location}}.^^    -{{sender}}",
+    "Ei, achei este {{item}} na geladeira do Saloon em {{location}}. Ele ainda fornece {{energy}} de energia, então aproveite!^^    -{{sender}}",
+    "Um doce presente culinário de um amigo de outro mundo! Aproveite este saboroso {{item}} (+{{energy}} Energia / +{{health}} Vida) na fazenda {{farm}}!^^    -{{sender}}",
+    "Gus me deu este {{item}} fresquinho, mas decidi enviar para você porque sei que está trabalhando duro e precisa de mais {{energy}} pontos de energia!^^    -{{sender}}"
+  ],
+  "GiftMails": [
+    "Esperamos que este saboroso {{item}} (+{{energy}} Energia / +{{health}} Vida) convença você de vez a sair do Burger King...^^    -{{sender}} de {{game}}",
+    "Estava jogando {{game}} e ganhei este delicioso {{item}} que restaura {{energy}} de energia, mas como estou de dieta, mandei para você!^^    -{{sender}}"
+  ]
+}

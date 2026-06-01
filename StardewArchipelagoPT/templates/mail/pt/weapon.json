@@ -1,0 +1,12 @@
+{
+  "ItemMails": [
+    "Ei @, encontrei esta incrível {{item}} brilhando nas profundezas das Minas de {{location}}! Com ela, você vai fatiar os monstros num piscar de olhos!^^    -{{sender}}",
+    "Com grandes poderes vêm grandes responsabilidades... e esta {{item}} formidável direto de {{location}}! Use-a com sabedoria na fazenda {{farm}}.^^    -{{sender}}",
+    "Você parecia meio desprotegido contra os Slimes, então mandei esta {{item}} de presente de multiworld! Não saia de casa sem ela!^^    -{{sender}}",
+    "Marlon me pediu para enviar isto para você: uma lendária {{item}}! Encontrada em {{location}}, ela fará inveja na guilda dos aventureiros.^^    -{{sender}}"
+  ],
+  "GiftMails": [
+    "Sinta o poder da Força! Mandei esta {{item}} lendária para você direto de {{game}}!^^    -{{sender}}",
+    "Estava lutando em {{game}} e decidi forjar esta {{item}} especialmente para você detonar as ameaças das cavernas!^^    -{{sender}}"
+  ]
+}
