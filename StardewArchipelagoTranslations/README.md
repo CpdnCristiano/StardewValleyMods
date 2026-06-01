@@ -1,7 +1,7 @@
 # Stardew Archipelago Translations
 
 > [!WARNING]
-> **Status do Projeto**: Este mod de tradução ainda está em **caráter experimental** e **não está 100% concluído**. Este mod **não visa ser publicado** no momento devido ao seu estado de desenvolvimento e testes contínuos. Use por sua conta e risco.
+> **Project Status**: This translation mod is still **experimental** and is **not 100% complete**. It **is not intended to be published** at this time due to its active development and ongoing testing. Use at your own risk.
 
 A standalone multilingual localization and patcher mod for [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago).
 
