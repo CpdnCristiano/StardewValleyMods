@@ -5,7 +5,7 @@ using HarmonyLib;
 using Microsoft.Xna.Framework;
 using StardewValley.Menus;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     /// <summary>
     /// Intercepts direct Game1.chatBox.addMessage() calls from the core StardewArchipelago mod

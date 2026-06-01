@@ -3,7 +3,7 @@ using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class I18nPatcher
     {

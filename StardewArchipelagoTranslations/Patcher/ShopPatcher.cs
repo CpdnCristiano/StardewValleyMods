@@ -4,7 +4,7 @@ using HarmonyLib;
 using StardewModdingAPI;
 using StardewArchipelago.Locations.InGameLocations;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class ShopPatcher
     {

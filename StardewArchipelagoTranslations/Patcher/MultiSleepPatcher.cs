@@ -7,7 +7,7 @@ using StardewValley.Menus;
 using StardewValley.GameData.Buildings;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class MultiSleepPatcher
     {

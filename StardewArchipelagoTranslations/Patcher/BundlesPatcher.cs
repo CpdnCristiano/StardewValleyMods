@@ -6,7 +6,7 @@ using StardewValley.Menus;
 using StardewArchipelago.Locations.CodeInjections.Vanilla.Bundles;
 using StardewArchipelago.Locations.CodeInjections.Vanilla.Bundles.Remakes;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class BundlesPatcher
     {

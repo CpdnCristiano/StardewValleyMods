@@ -8,7 +8,7 @@ using StardewValley;
 using StardewValley.TokenizableStrings;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public static class TranslationHelper
     {

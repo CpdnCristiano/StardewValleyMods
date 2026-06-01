@@ -14,7 +14,7 @@ using Archipelago.MultiClient.Net.MessageLog.Messages;
 using Color = Microsoft.Xna.Framework.Color;
 using Archipelago.MultiClient.Net.MessageLog.Parts;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     [HarmonyPatch(typeof(StardewArchipelagoClient), "OnMessageReceived")]
     public static class ChatPatcher

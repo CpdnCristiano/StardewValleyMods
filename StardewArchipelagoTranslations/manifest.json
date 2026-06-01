@@ -1,0 +1,15 @@
+{
+  "Name": "Stardew Archipelago Translations",
+  "Author": "CpdnCristiano",
+  "Version": "1.0.0",
+  "Description": "Standalone multilingual translation mod for StardewArchipelago using Harmony patches",
+  "UniqueID": "CpdnCristiano.StardewArchipelagoTranslations",
+  "EntryDll": "StardewArchipelagoTranslations.dll",
+  "MinimumApiVersion": "4.0.0",
+  "Dependencies": [
+    {
+      "UniqueID": "KaitoKid.StardewArchipelago",
+      "IsRequired": true
+    }
+  ]
+}

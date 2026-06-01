@@ -8,7 +8,7 @@ using StardewArchipelago.Items.Mail;
 using StardewArchipelago.Extensions;
 using StardewArchipelago.Constants;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public class MailCategoryData
     {

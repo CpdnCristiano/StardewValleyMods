@@ -3,9 +3,9 @@ using System.Reflection;
 using HarmonyLib;
 using StardewValley;
 using StardewModdingAPI;
-using CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher;
+using CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class ModEntry : Mod
     {
@@ -106,7 +106,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT
                 }
             });
 
-            helper.ConsoleCommands.Add("ap_pt_mem", "Shows the exact, real-time memory usage of the StardewArchipelagoPT translation mod.", (command, args) =>
+            helper.ConsoleCommands.Add("ap_pt_mem", "Shows the exact, real-time memory usage of the StardewArchipelagoTranslations translation mod.", (command, args) =>
             {
                 try
                 {
@@ -115,7 +115,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT
                     double mb = kb / 1024.0;
 
                     Monitor.Log("====================================================", LogLevel.Info);
-                    Monitor.Log("   StardewArchipelagoPT - Memory Usage Status", LogLevel.Info);
+                    Monitor.Log("   StardewArchipelagoTranslations - Memory Usage Status", LogLevel.Info);
                     Monitor.Log("====================================================", LogLevel.Info);
                     Monitor.Log($" -> Active Dynamic Caches:  {cacheCount} entries", LogLevel.Info);
                     Monitor.Log($" -> Game Database Indexes:  {indexCount} entries", LogLevel.Info);

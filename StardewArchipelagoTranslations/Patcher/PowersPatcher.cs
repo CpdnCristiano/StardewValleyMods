@@ -7,7 +7,7 @@ using StardewModdingAPI;
 using StardewArchipelago.GameModifications.CodeInjections.Powers;
 using StardewValley.Menus;
 
-namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoPT.Patcher
+namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     [HarmonyPatch(typeof(PowersModifier), "AddPower")]
     public static class PowersPatcher
