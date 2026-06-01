@@ -1,11 +1,11 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using CpdnCristiano.StardewValleyMods.Common.Log;
-using CpdnCristiano.StardewValleyMods.Common.Patching;
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
 using HarmonyLib;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
     internal class UiInfo2AltPatcher : BasePatcher
     {
@@ -14,6 +14,11 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             var original = AccessTools.Method(
                 "UIInfoSuite2Alt.UIElements.ShowCalendarAndBillboardOnGameMenuButton:DrawBillboard"
             );
+            if (original is null)
+            {
+                monitor.Log("Could not find UIInfoSuite2Alt DrawBillboard method; skipping patch.", LogLevel.Warn);
+                return;
+            }
             harmony.Patch(
                 original: original,
                 transpiler: this.GetHarmonyMethod(nameof(drawBillboardTranspiler))

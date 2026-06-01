@@ -1,15 +1,13 @@
-using CpdnCristiano.StardewValleyMods.Common.Patching;
-using CpdnCristiano.StardewValleyMods.FixWarpGreenhouses.Patcher;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FixWarpGreenhouses.Patcher;
 using StardewModdingAPI;
 
-namespace CpdnCristiano.StardewValleyMods.FixWarpGreenhouses
+namespace CpdnCristiano.StardewValleyMod.FixWarpGreenhouses;
+
+public class ModEntry : Mod
 {
-    public class ModEntry : Mod
+    public override void Entry(IModHelper helper)
     {
-        public override void Entry(IModHelper helper)
-        {
-            var patches = new List<IPatcher> { new LocationRequestPatcher() };
-            HarmonyPatcher.Apply(this, patches.ToArray());
-        }
+        HarmonyPatcher.Apply(this, new LocationRequestPatcher());
     }
 }

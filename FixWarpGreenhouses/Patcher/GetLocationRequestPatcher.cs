@@ -1,10 +1,10 @@
 using System;
-using CpdnCristiano.StardewValleyMods.Common.Patching;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
 
-namespace CpdnCristiano.StardewValleyMods.FixWarpGreenhouses.Patcher
+namespace CpdnCristiano.StardewValleyMod.FixWarpGreenhouses.Patcher
 {
     internal class LocationRequestPatcher : BasePatcher
     {

@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using CpdnCristiano.StardewValleyMods.Common.Log;
-using CpdnCristiano.StardewValleyMods.Common.Patching;
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.Common.Patching;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -11,19 +11,19 @@ using StardewValley.Inventories;
 using StardewValley.Menus;
 using static StardewValley.Menus.InventoryMenu;
 
-namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
     internal class InventoryMenuPatcher : BasePatcher
     {
-        private static readonly int DEFAULT_ROW_HEIGHT = 64;
+        private const int DEFAULT_ROW_HEIGHT = 64;
 
-        private static readonly int DEFAULT_COLUMN_COUNT = 12;
+        private const int DEFAULT_COLUMN_COUNT = 12;
 
-        private static readonly int DEFAULT_ROW_COUNT = 3;
+        private const int DEFAULT_ROW_COUNT = 3;
 
-        private static readonly int MAX_ROW_COUNT = 7;
+        private const int MAX_ROW_COUNT = 7;
 
-        private static readonly int DEFAULT_MAX_ITEMS = 36;
+        private const int DEFAULT_MAX_ITEMS = 36;
 
         private static int GetRows()
         {
@@ -32,14 +32,12 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                 return DEFAULT_ROW_COUNT;
             }
             int rows = Game1.player.maxItems.Value / DEFAULT_COLUMN_COUNT;
-
-            return rows > MAX_ROW_COUNT ? MAX_ROW_COUNT : rows;
+            return Math.Min(rows, MAX_ROW_COUNT);
         }
 
         private static int GetExtraRow()
         {
-            int rows = GetRows();
-            return rows > DEFAULT_ROW_COUNT ? (rows - DEFAULT_ROW_COUNT) : 0;
+            return Math.Max(0, GetRows() - DEFAULT_ROW_COUNT);
         }
 
         public static int GetExtraHeight()
@@ -111,20 +109,6 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                 prefix: this.GetHarmonyMethod(nameof(CraftingPagePrefix))
             );
 
-            MethodInfo method = typeof(IClickableMenu).GetMethod(
-                "drawHorizontalPartition",
-                BindingFlags.NonPublic | BindingFlags.Instance,
-                new Type[]
-                {
-                    typeof(SpriteBatch),
-                    typeof(int),
-                    typeof(bool),
-                    typeof(int),
-                    typeof(int),
-                    typeof(int),
-                }
-            )!;
-
             harmony.Patch(
                 original: this.RequireConstructor<IClickableMenu>(
                     new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), typeof(bool) }
@@ -169,7 +153,7 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
                     Log.Error("Field '_isStorageShop' not found in ShopMenu.");
                     return true;
                 }
-                var isStorageShop = _isStorageShopField?.GetValue(__instance) as bool? ?? false;
+                var isStorageShop = _isStorageShopField.GetValue(__instance) as bool? ?? false;
                 if (!isStorageShop && __instance.currency == 0)
                 {
                     var extraHeight =
@@ -266,49 +250,34 @@ namespace CpdnCristiano.StardewValleyMods.FullInventoryView.Patcher
             ref int height
         )
         {
-            if (
-                !(
-                    __instance is GameMenu
-                    || __instance is MenuWithInventory
-                    || __instance is ShopMenu
-                    || __instance is TailoringMenu
-                )
-            )
+            if (__instance is not (GameMenu or MenuWithInventory or ShopMenu or TailoringMenu))
                 return;
 
             if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
             {
                 if (__instance is GameMenu)
                 {
-                    int extraEspace = GetExtraHeight() / 2;
-                    y -= extraEspace;
+                    int extraSpace = GetExtraHeight() / 2;
+                    y -= extraSpace;
                 }
                 else if (__instance is MuseumMenu)
                 {
-                    int extraEspace = GetExtraHeight();
-                    height += extraEspace;
+                    int extraSpace = GetExtraHeight();
+                    height += extraSpace;
                 }
                 else if (__instance is ItemGrabMenu)
                 {
-                    int extraEspace = GetExtraHeight();
-                    height += extraEspace;
-                    y -= extraEspace / 2 - DEFAULT_ROW_HEIGHT;
+                    int extraSpace = GetExtraHeight();
+                    height += extraSpace;
+                    y -= extraSpace / 2 - DEFAULT_ROW_HEIGHT;
                 }
                 else
                 {
-                    int extraEspace = GetExtraHeight();
-                    height += extraEspace;
-                    y -= extraEspace / 2;
+                    int extraSpace = GetExtraHeight();
+                    height += extraSpace;
+                    y -= extraSpace / 2;
                 }
             }
-        }
-
-        private static void iClickableMenuPostifix(IClickableMenu __instance)
-        {
-            if (!(__instance is GameMenu || __instance is MenuWithInventory))
-                return;
-
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS) { }
         }
 
         private static void InventoryMenuPrefix(

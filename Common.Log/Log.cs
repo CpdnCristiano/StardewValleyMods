@@ -1,7 +1,7 @@
 using StardewModdingAPI;
 using StardewValley;
 
-namespace CpdnCristiano.StardewValleyMods.Common.Log;
+namespace CpdnCristiano.StardewValleyMod.Common.Log;
 
 internal static class Log
 {
