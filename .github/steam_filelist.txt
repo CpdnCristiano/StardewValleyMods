@@ -1,0 +1,7 @@
+regex:Stardew Valley\.dll
+regex:MonoGame\.Framework\.dll
+regex:xTile\.dll
+regex:Netcode\.dll
+regex:StardewModdingAPI\.dll
+regex:SMAPI\.Toolkit\.dll
+regex:SMAPI\.Toolkit\.CoreInterfaces\.dll

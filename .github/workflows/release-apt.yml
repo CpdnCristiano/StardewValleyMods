@@ -1,0 +1,85 @@
+name: Build & Release StardewArchipelagoTranslations
+
+on:
+  push:
+    tags:
+      - "apt-v*"   # ex: apt-v1.2.0  (apt = Archipelago PT)
+
+permissions:
+  contents: write  # necessário para criar releases
+
+jobs:
+  build:
+    name: Build e Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. .NET 6 ──────────────────────────────────────────────────────
+      - name: Configurar .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "6.0.x"
+
+      # ── 3. Baixar Stardew Valley via DepotDownloader ───────────────────
+      # O ModBuildConfig precisa dos arquivos do jogo para resolver refs.
+      # Usamos DepotDownloader com conta anônima (depots públicos do Steam).
+      - name: Instalar DepotDownloader
+        run: dotnet tool install -g DepotDownloader
+
+      - name: Baixar Stardew Valley (depot 413151 – Linux)
+        run: |
+          depotdownloader \
+            -app 413150 -depot 413151 \
+            -username "${{ secrets.STEAM_USERNAME }}" \
+            -password "${{ secrets.STEAM_PASSWORD }}" \
+            -remember-password \
+            -dir "$HOME/StardewValley" \
+            -filelist .github/steam_filelist.txt
+        # steam_filelist.txt limita o download só aos arquivos necessários
+
+      # ── 4. Baixar StardewArchipelago.dll ──────────────────────────────
+      - name: Baixar StardewArchipelago (última release)
+        run: |
+          RELEASE_URL=$(curl -s https://api.github.com/repos/KaitoKid/StardewArchipelago/releases/latest \
+            | grep "browser_download_url.*\.zip" | head -1 | cut -d'"' -f4)
+          curl -L "$RELEASE_URL" -o archipelago.zip
+          unzip -o archipelago.zip -d "$HOME/StardewValley/Mods/StardewArchipelago"
+          echo "StardewArchipelago extraído em $HOME/StardewValley/Mods/StardewArchipelago"
+
+      # ── 5. Build Release ───────────────────────────────────────────────
+      - name: Build (Release)
+        run: |
+          dotnet build StardewArchipelagoTranslations/StardewArchipelagoTranslations.csproj \
+            -c Release \
+            /p:GamePath="$HOME/StardewValley" \
+            /p:EnableModDeploy=false \
+            /p:EnableModZip=true \
+            /p:ModZipPath="$GITHUB_WORKSPACE/artifacts"
+        env:
+          DOTNET_NOLOGO: true
+
+      # ── 6. Listar artefatos gerados ────────────────────────────────────
+      - name: Listar artefatos
+        run: ls -lh artifacts/
+
+      # ── 7. Criar GitHub Release ────────────────────────────────────────
+      - name: Criar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Stardew Archipelago Translations ${{ github.ref_name }}"
+          body: |
+            ## 🎮 Stardew Archipelago Translations ${{ github.ref_name }}
+
+            Mod de tradução para o StardewArchipelago.
+
+            ### Instalação
+            1. Baixe o arquivo `.zip` abaixo
+            2. Extraia dentro da pasta `Mods` do Stardew Valley
+            3. Certifique-se de ter o [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago/releases) instalado
+          files: artifacts/*.zip
+          draft: false
+          prerelease: false
