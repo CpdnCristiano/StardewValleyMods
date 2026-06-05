@@ -13,8 +13,8 @@
     <PackageReference Include="Archipelago.MultiClient.Net" Version="6.7.1" />
   </ItemGroup>
   <PropertyGroup>
-    <!-- Caminho local padrão; sobrescreva com /p:StardewArchipelagoDllPath=... no CI -->
-    <StardewArchipelagoDllPath Condition="'$(StardewArchipelagoDllPath)' == ''">d:\steam\steamapps\common\Stardew Valley\Mods\StardewArchipelago\StardewArchipelago.dll</StardewArchipelagoDllPath>
+    <!-- Caminho padrão: lib/ no repo. Sobrescreva com /p:StardewArchipelagoDllPath=... se necessário -->
+    <StardewArchipelagoDllPath Condition="'$(StardewArchipelagoDllPath)' == ''">$(MSBuildThisFileDirectory)..\lib\StardewArchipelago.dll</StardewArchipelagoDllPath>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="StardewArchipelago">

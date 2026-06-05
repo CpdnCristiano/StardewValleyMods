@@ -8,10 +8,12 @@ on:
     paths:
       - '.github/workflows/build.yml'
       - 'StardewArchipelagoTranslations/**'
+      - 'lib/**'
   pull_request:
     paths:
       - '.github/workflows/build.yml'
       - 'StardewArchipelagoTranslations/**'
+      - 'lib/**'
   workflow_dispatch:
 
 permissions:
@@ -33,28 +35,15 @@ jobs:
         with:
           dotnet-version: "6.0.x"
 
-      # ── 3. Baixar StardewArchipelago.dll do GitHub ────────────────────
-      # Sem Steam! O ModBuildConfig já traz as DLLs do jogo via NuGet.
-      # Só precisamos do StardewArchipelago.dll que está no GitHub.
-      - name: Baixar StardewArchipelago.dll
-        run: |
-          RELEASE_URL=$(curl -s https://api.github.com/repos/KaitoKid/StardewArchipelago/releases/latest \
-            | grep "browser_download_url.*\.zip" | head -1 | cut -d'"' -f4)
-          echo "Baixando: $RELEASE_URL"
-          curl -L "$RELEASE_URL" -o archipelago.zip
-          mkdir -p "$HOME/StardewArchipelago"
-          unzip -o archipelago.zip -d "$HOME/StardewArchipelago"
-          DLL_PATH=$(find "$HOME/StardewArchipelago" -name "StardewArchipelago.dll" | head -1)
-          echo "DLL encontrada: $DLL_PATH"
-          echo "ARCHIPELAGO_DLL=$DLL_PATH" >> $GITHUB_ENV
-
-      # ── 4. Build ───────────────────────────────────────────────────────
+      # ── 3. Build ───────────────────────────────────────────────────────
+      # StardewArchipelago.dll está em lib/ no próprio repo.
+      # ModBuildConfig v4+ já inclui as DLLs do Stardew via NuGet.
+      # Sem Steam, sem downloads externos, sem secrets!
       - name: Build
         run: |
           mkdir -p dist
           dotnet build StardewArchipelagoTranslations/StardewArchipelagoTranslations.csproj \
             -c Release \
-            /p:StardewArchipelagoDllPath="${{ env.ARCHIPELAGO_DLL }}" \
             /p:EnableModDeploy=false \
             /p:EnableModZip=true \
             /p:ModZipPath="$GITHUB_WORKSPACE/dist"
@@ -64,7 +53,7 @@ jobs:
         env:
           DOTNET_NOLOGO: true
 
-      # ── 5. Salvar artefato ─────────────────────────────────────────────
+      # ── 4. Salvar artefato ─────────────────────────────────────────────
       - name: Salvar artefato de build
         uses: actions/upload-artifact@v4
         with:
@@ -73,7 +62,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # ── 6. GitHub Release (somente em tags apt-v*) ────────────────────
+      # ── 5. GitHub Release (somente em tags apt-v*) ────────────────────
       - name: Criar GitHub Release
         if: startsWith(github.ref, 'refs/tags/apt-v')
         uses: softprops/action-gh-release@v2
@@ -87,7 +76,7 @@ jobs:
             ### 📦 Instalação
             1. Baixe o arquivo `.zip` abaixo
             2. Extraia dentro da pasta `Mods` do Stardew Valley
-            3. Certifique-se de ter o [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago/releases) instalado
+            3. Certifique-se de ter o [StardewArchipelago](https://github.com/KaitoKid/StardewArchipelago) instalado
 
             ### 🌐 Idiomas suportados
             - 🇧🇷 Português (pt)
