@@ -12,9 +12,13 @@
     <PackageReference Include="KaitoKid.ArchipelagoUtilities.Net" Version="3.1.15" />
     <PackageReference Include="Archipelago.MultiClient.Net" Version="6.7.1" />
   </ItemGroup>
+  <PropertyGroup>
+    <!-- Caminho local padrão; sobrescreva com /p:StardewArchipelagoDllPath=... no CI -->
+    <StardewArchipelagoDllPath Condition="'$(StardewArchipelagoDllPath)' == ''">d:\steam\steamapps\common\Stardew Valley\Mods\StardewArchipelago\StardewArchipelago.dll</StardewArchipelagoDllPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="StardewArchipelago">
-      <HintPath>d:\steam\steamapps\common\Stardew Valley\Mods\StardewArchipelago\StardewArchipelago.dll</HintPath>
+      <HintPath>$(StardewArchipelagoDllPath)</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
