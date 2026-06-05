@@ -11,28 +11,46 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         {
             try
             {
-                var stardewArchipelagoAssembly = AppDomain.CurrentDomain.GetAssemblies()
+                var stardewArchipelagoAssembly = AppDomain
+                    .CurrentDomain.GetAssemblies()
                     .FirstOrDefault(a => a.GetName().Name == "StardewArchipelago");
                 if (stardewArchipelagoAssembly != null)
                 {
                     var i18nType = stardewArchipelagoAssembly.GetType("StardewArchipelago.I18n");
                     if (i18nType != null)
                     {
-                        var getMethod1 = i18nType.GetMethod("Get", new Type[] { typeof(string), typeof(object) });
-                        var getMethod2 = i18nType.GetMethod("Get", new Type[] { typeof(string), typeof(string), typeof(object) });
+                        var getMethod1 = i18nType.GetMethod(
+                            "Get",
+                            new Type[] { typeof(string), typeof(object) }
+                        );
+                        var getMethod2 = i18nType.GetMethod(
+                            "Get",
+                            new Type[] { typeof(string), typeof(string), typeof(object) }
+                        );
 
-                        var postfixPatch = new HarmonyMethod(typeof(I18nPatcher), nameof(I18nGet_Postfix));
+                        var postfixPatch = new HarmonyMethod(
+                            typeof(I18nPatcher),
+                            nameof(I18nGet_Postfix)
+                        );
 
-                        if (getMethod1 != null) harmony.Patch(getMethod1, postfix: postfixPatch);
-                        if (getMethod2 != null) harmony.Patch(getMethod2, postfix: postfixPatch);
-                        
-                        ModEntry.Instance.Monitor.Log("Successfully patched StardewArchipelago I18n class!", StardewModdingAPI.LogLevel.Info);
+                        if (getMethod1 != null)
+                            harmony.Patch(getMethod1, postfix: postfixPatch);
+                        if (getMethod2 != null)
+                            harmony.Patch(getMethod2, postfix: postfixPatch);
+
+                        ModEntry.Instance.Monitor.Log(
+                            "Successfully patched StardewArchipelago I18n class!",
+                            StardewModdingAPI.LogLevel.Info
+                        );
                     }
                 }
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Failed to patch StardewArchipelago I18n: {ex}", StardewModdingAPI.LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Failed to patch StardewArchipelago I18n: {ex}",
+                    StardewModdingAPI.LogLevel.Error
+                );
             }
         }
 

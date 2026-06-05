@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using HarmonyLib;
 using Microsoft.Xna.Framework.Graphics;
-using StardewModdingAPI;
 using StardewArchipelago.GameModifications.CodeInjections.Powers;
+using StardewModdingAPI;
 using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
@@ -13,13 +13,20 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
     public static class PowersPatcher
     {
         [HarmonyPostfix]
-        public static void Postfix(object __instance, IDictionary<string, StardewValley.GameData.Powers.PowersData> powersData, ArchipelagoPower customPower)
+        public static void Postfix(
+            object __instance,
+            IDictionary<string, StardewValley.GameData.Powers.PowersData> powersData,
+            ArchipelagoPower customPower
+        )
         {
             try
             {
                 if (powersData.TryGetValue(customPower.Name, out var powerData))
                 {
-                    var sanitizedName = customPower.Name.Replace(" ", "_").Replace("'", "").ToLower();
+                    var sanitizedName = customPower
+                        .Name.Replace(" ", "_")
+                        .Replace("'", "")
+                        .ToLower();
                     var nameKey = $"power.{sanitizedName}.name";
                     var descKey = $"power.{sanitizedName}.description";
 
@@ -40,7 +47,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         }
     }
 
-    [HarmonyPatch(typeof(PowersModifier), nameof(PowersModifier.PerformHoverAction_AddTooltipsOnApItems_Postfix))]
+    [HarmonyPatch(
+        typeof(PowersModifier),
+        nameof(PowersModifier.PerformHoverAction_AddTooltipsOnApItems_Postfix)
+    )]
     public static class PowersTooltipPatcher
     {
         [HarmonyPostfix]
@@ -52,7 +62,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in PowersTooltipPatcher: {ex.Message}", LogLevel.Trace);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in PowersTooltipPatcher: {ex.Message}",
+                    LogLevel.Trace
+                );
             }
         }
     }
@@ -69,7 +82,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in PowersTabDrawTooltipPatcher: {ex.Message}", LogLevel.Trace);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in PowersTabDrawTooltipPatcher: {ex.Message}",
+                    LogLevel.Trace
+                );
             }
         }
     }
@@ -86,23 +102,36 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             var rawDescription = powersTab.descriptionText;
             var normalizedDescription = Regex.Replace(rawDescription, @"\s+", " ").Trim();
 
-            if (normalizedDescription.Equals("You can hint this item", StringComparison.OrdinalIgnoreCase))
+            if (
+                normalizedDescription.Equals(
+                    "You can hint this item",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                powersTab.descriptionText = ModEntry.Translation.Get("powers.hint_available").ToString();
+                powersTab.descriptionText = ModEntry
+                    .Translation.Get("powers.hint_available")
+                    .ToString();
                 return;
             }
 
-            var match = Regex.Match(normalizedDescription, @"^At\s+(.+?)'s\s+(.+)$", RegexOptions.IgnoreCase);
+            var match = Regex.Match(
+                normalizedDescription,
+                @"^At\s+(.+?)'s\s+(.+)$",
+                RegexOptions.IgnoreCase
+            );
             if (match.Success)
             {
                 var findingPlayerName = match.Groups[1].Value.Trim();
                 var locationName = match.Groups[2].Value.Trim();
                 var localizedLocation = TranslationHelper.GetLocalizedLocationName(locationName);
 
-                powersTab.descriptionText = ModEntry.Translation.Get(
-                    "powers.hint_at_format",
-                    new { player = findingPlayerName, location = localizedLocation }
-                ).ToString();
+                powersTab.descriptionText = ModEntry
+                    .Translation.Get(
+                        "powers.hint_at_format",
+                        new { player = findingPlayerName, location = localizedLocation }
+                    )
+                    .ToString();
             }
         }
     }

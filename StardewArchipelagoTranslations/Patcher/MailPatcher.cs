@@ -1,12 +1,14 @@
 using System;
-using System.Reflection;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
+using StardewArchipelago.Archipelago;
+using StardewArchipelago.Constants;
+using StardewArchipelago.Extensions;
+using StardewArchipelago.Items.Mail;
+using StardewArchipelago.Serialization;
 using StardewModdingAPI;
 using StardewValley;
-using StardewArchipelago.Items.Mail;
-using StardewArchipelago.Extensions;
-using StardewArchipelago.Constants;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
@@ -20,10 +22,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
     public static class MailPatcher
     {
         private static readonly Random _random = new();
-        
+
         // Caches for the templates loaded dynamically from templates/mail/{locale}/{category}.json
-        public static Dictionary<string, List<string>> ItemTemplates { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
-        public static Dictionary<string, List<string>> GiftTemplates { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+        public static Dictionary<string, List<string>> ItemTemplates { get; private set; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public static Dictionary<string, List<string>> GiftTemplates { get; private set; } =
+            new(StringComparer.OrdinalIgnoreCase);
 
         public static void LoadTemplates(IModHelper helper)
         {
@@ -33,12 +37,22 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 GiftTemplates.Clear();
 
                 string locale = helper.Translation.Locale;
-                string dirPath = System.IO.Path.Combine(helper.DirectoryPath, "templates", "mail", locale);
-                
+                string dirPath = System.IO.Path.Combine(
+                    helper.DirectoryPath,
+                    "templates",
+                    "mail",
+                    locale
+                );
+
                 if (!System.IO.Directory.Exists(dirPath))
                 {
                     // Fall back to default English templates directory
-                    dirPath = System.IO.Path.Combine(helper.DirectoryPath, "templates", "mail", "default");
+                    dirPath = System.IO.Path.Combine(
+                        helper.DirectoryPath,
+                        "templates",
+                        "mail",
+                        "default"
+                    );
                     locale = "default";
                 }
 
@@ -48,8 +62,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     foreach (var file in files)
                     {
                         var category = System.IO.Path.GetFileNameWithoutExtension(file);
-                        var loaded = helper.Data.ReadJsonFile<MailCategoryData>($"templates/mail/{locale}/{category}.json");
-                        
+                        var loaded = helper.Data.ReadJsonFile<MailCategoryData>(
+                            $"templates/mail/{locale}/{category}.json"
+                        );
+
                         if (loaded != null)
                         {
                             if (loaded.ItemMails != null && loaded.ItemMails.Count > 0)
@@ -62,18 +78,27 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                             }
                         }
                     }
-                    ModEntry.Instance.Monitor.Log($"Successfully loaded custom mail categories from {dirPath}", LogLevel.Info);
+                    ModEntry.Instance.Monitor.Log(
+                        $"Successfully loaded custom mail categories from {dirPath}",
+                        LogLevel.Info
+                    );
                 }
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Failed to load mail templates: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Failed to load mail templates: {ex}",
+                    LogLevel.Error
+                );
             }
         }
 
         [HarmonyPatch("SendArchipelagoMail")]
         [HarmonyPrefix]
-        public static void SendArchipelagoMail_Prefix(ref string apItemName, ref string locationName)
+        public static void SendArchipelagoMail_Prefix(
+            ref string apItemName,
+            ref string locationName
+        )
         {
             apItemName = TranslationHelper.GetLocalizedItemName(apItemName);
             locationName = TranslationHelper.GetLocalizedLocationName(locationName);
@@ -81,13 +106,21 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 
         [HarmonyPatch("SendArchipelagoGiftMail")]
         [HarmonyPrefix]
-        public static bool SendArchipelagoGiftMail_Prefix(Mailman __instance, string mailKey, string itemName, string senderName, string senderGame, string attachmentEmbedString)
+        public static bool SendArchipelagoGiftMail_Prefix(
+            Mailman __instance,
+            string mailKey,
+            string itemName,
+            string senderName,
+            string senderGame,
+            string attachmentEmbedString
+        )
         {
             try
             {
                 var localizedItem = TranslationHelper.GetLocalizedItemName(itemName);
                 string category = GetItemCategory(itemName);
-                
+                var localizedSender = TranslationHelper.GetLocalizedPlayerName(senderName);
+
                 // 1. Load all original translated gift templates from pt.json
                 var allTemplates = new List<string>();
                 for (int i = 0; i < 100; i++)
@@ -113,7 +146,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 if (allTemplates.Count > 0)
                 {
                     var template = allTemplates[_random.Next(0, allTemplates.Count)];
-                    
+
                     int energy = 0;
                     int health = 0;
                     if (category == "food")
@@ -123,21 +156,35 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 
                     var mailContent = template
                         .Replace("{{item}}", localizedItem)
-                        .Replace("{{sender}}", senderName)
+                        .Replace("{{sender}}", localizedSender)
                         .Replace("{{game}}", senderGame)
                         .Replace("{{farm}}", Game1.player.farmName.Value)
                         .Replace("{{energy}}", energy.ToString())
                         .Replace("{{health}}", health.ToString());
-                    
-                    if (mailContent.Contains("{0}") || mailContent.Contains("{1}") || mailContent.Contains("{2}") || mailContent.Contains("{3}"))
+
+                    if (
+                        mailContent.Contains("{0}")
+                        || mailContent.Contains("{1}")
+                        || mailContent.Contains("{2}")
+                        || mailContent.Contains("{3}")
+                    )
                     {
                         try
                         {
-                            mailContent = string.Format(mailContent, localizedItem, senderName, senderGame, attachmentEmbedString);
+                            mailContent = string.Format(
+                                mailContent,
+                                localizedItem,
+                                localizedSender,
+                                senderGame,
+                                attachmentEmbedString
+                            );
                         }
                         catch (Exception ex)
                         {
-                            ModEntry.Instance.Monitor.Log($"Error formatting legacy gift template '{template}': {ex.Message}", LogLevel.Trace);
+                            ModEntry.Instance.Monitor.Log(
+                                $"Error formatting legacy gift template '{template}': {ex.Message}",
+                                LogLevel.Trace
+                            );
                         }
                     }
 
@@ -146,29 +193,50 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     __instance.SendMail(mailKey);
                     return false; // Skip original
                 }
-                
+
                 return true;
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in SendArchipelagoGiftMail prefix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in SendArchipelagoGiftMail prefix: {ex}",
+                    LogLevel.Error
+                );
                 return true;
             }
         }
 
-        [HarmonyPatch("GenerateMail", new Type[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(string) })]
+        [HarmonyPatch(
+            "GenerateMail",
+            new Type[]
+            {
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+            }
+        )]
         [HarmonyPrefix]
-        public static bool GenerateMail_Prefix(Mailman __instance, string mailKey, string apItemName, string findingPlayer, string locationName, string embedString)
+        public static bool GenerateMail_Prefix(
+            Mailman __instance,
+            string mailKey,
+            string apItemName,
+            string findingPlayer,
+            string locationName,
+            string embedString
+        )
         {
             try
             {
                 var localizedItem = TranslationHelper.GetLocalizedItemName(apItemName);
                 var localizedLocation = TranslationHelper.GetLocalizedLocationName(locationName);
-                var anonPlayer = findingPlayer.ToAnonymousName();
+                var localizedSender = TranslationHelper.GetLocalizedPlayerName(findingPlayer);
+                var anonPlayer = localizedSender.ToAnonymousName();
 
                 // Determine category
                 string category = GetItemCategory(apItemName);
-                
+
                 // 1. Load all original translated item templates from pt.json
                 var allTemplates = new List<string>();
                 for (int i = 0; i < 200; i++)
@@ -194,7 +262,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 if (allTemplates.Count > 0)
                 {
                     var template = allTemplates[_random.Next(0, allTemplates.Count)];
-                    
+
                     int energy = 0;
                     int health = 0;
                     if (category == "food")
@@ -209,35 +277,56 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                         .Replace("{{farm}}", Game1.player.farmName.Value)
                         .Replace("{{energy}}", energy.ToString())
                         .Replace("{{health}}", health.ToString());
-                    
-                    if (mailContent.Contains("{0}") || mailContent.Contains("{1}") || mailContent.Contains("{2}") || mailContent.Contains("{3}") || mailContent.Contains("{4}"))
+
+                    if (
+                        mailContent.Contains("{0}")
+                        || mailContent.Contains("{1}")
+                        || mailContent.Contains("{2}")
+                        || mailContent.Contains("{3}")
+                        || mailContent.Contains("{4}")
+                    )
                     {
                         try
                         {
-                            mailContent = string.Format(mailContent, localizedItem, anonPlayer, localizedLocation, embedString, Game1.player.farmName.Value);
+                            mailContent = string.Format(
+                                mailContent,
+                                localizedItem,
+                                anonPlayer,
+                                localizedLocation,
+                                embedString,
+                                Game1.player.farmName.Value
+                            );
                         }
                         catch (Exception ex)
                         {
-                            ModEntry.Instance.Monitor.Log($"Error formatting legacy item template '{template}': {ex.Message}", LogLevel.Trace);
+                            ModEntry.Instance.Monitor.Log(
+                                $"Error formatting legacy item template '{template}': {ex.Message}",
+                                LogLevel.Trace
+                            );
                         }
                     }
 
                     if (mailContent.Contains(Community.NAME_TOKEN))
                     {
-                        var randomName = Community.AllNames[_random.Next(0, Community.AllNames.Length)];
+                        var randomName = Community.AllNames[
+                            _random.Next(0, Community.AllNames.Length)
+                        ];
                         mailContent = mailContent.Replace(Community.NAME_TOKEN, randomName);
                     }
-                    
+
                     mailContent += embedString + "[#]Archipelago Item";
                     __instance.GenerateMail(mailKey, mailContent);
                     return false; // Skip original GenerateMail
                 }
-                
+
                 return true;
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in dynamic GenerateMail prefix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in dynamic GenerateMail prefix: {ex}",
+                    LogLevel.Error
+                );
                 return true;
             }
         }
@@ -248,7 +337,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         {
             try
             {
-                if (string.IsNullOrEmpty(__result)) return;
+                if (string.IsNullOrEmpty(__result))
+                    return;
 
                 var suffix = "{3}[#]Archipelago Item";
                 var cleanTemplate = __result;
@@ -259,16 +349,23 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     hasSuffix = true;
                 }
 
-                if (cleanTemplate.Equals("{0} from {1} at {2}.", StringComparison.OrdinalIgnoreCase))
+                if (
+                    cleanTemplate.Equals("{0} from {1} at {2}.", StringComparison.OrdinalIgnoreCase)
+                )
                 {
                     if (ModEntry.Translation.ContainsKey("mail.concise"))
                     {
-                        __result = ModEntry.Translation.Get("mail.concise").ToString() + (hasSuffix ? suffix : "");
+                        __result =
+                            ModEntry.Translation.Get("mail.concise").ToString()
+                            + (hasSuffix ? suffix : "");
                     }
                     return;
                 }
 
-                var apMailStringsField = typeof(Mailman).GetField("ApMailStrings", BindingFlags.Instance | BindingFlags.NonPublic);
+                var apMailStringsField = typeof(Mailman).GetField(
+                    "ApMailStrings",
+                    BindingFlags.Instance | BindingFlags.NonPublic
+                );
                 var apMailStrings = (string[]?)apMailStringsField?.GetValue(__instance);
                 if (apMailStrings != null)
                 {
@@ -286,7 +383,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in GetRandomApMailString Postfix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in GetRandomApMailString Postfix: {ex}",
+                    LogLevel.Error
+                );
             }
         }
 
@@ -296,7 +396,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         {
             try
             {
-                if (string.IsNullOrEmpty(__result)) return;
+                if (string.IsNullOrEmpty(__result))
+                    return;
 
                 var suffix = "{3}[#]Archipelago Gift";
                 var cleanTemplate = __result;
@@ -307,7 +408,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     hasSuffix = true;
                 }
 
-                var apGiftStringsField = typeof(Mailman).GetField("ApGiftStrings", BindingFlags.Static | BindingFlags.NonPublic);
+                var apGiftStringsField = typeof(Mailman).GetField(
+                    "ApGiftStrings",
+                    BindingFlags.Static | BindingFlags.NonPublic
+                );
                 var apGiftStrings = (string[]?)apGiftStringsField?.GetValue(null);
                 if (apGiftStrings != null)
                 {
@@ -325,7 +429,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in GetRandomApMailGiftString Postfix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in GetRandomApMailGiftString Postfix: {ex}",
+                    LogLevel.Error
+                );
             }
         }
 
@@ -357,10 +464,15 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             health = 0;
             try
             {
-                var objects = Game1.content.Load<Dictionary<string, StardewValley.GameData.Objects.ObjectData>>("Data\\Objects");
+                var objects = Game1.content.Load<
+                    Dictionary<string, StardewValley.GameData.Objects.ObjectData>
+                >("Data\\Objects");
                 if (objects != null)
                 {
-                    var matchObj = System.Linq.Enumerable.FirstOrDefault(objects.Values, o => o.Name.Equals(itemName, StringComparison.OrdinalIgnoreCase));
+                    var matchObj = System.Linq.Enumerable.FirstOrDefault(
+                        objects.Values,
+                        o => o.Name.Equals(itemName, StringComparison.OrdinalIgnoreCase)
+                    );
                     if (matchObj != null)
                     {
                         int edibility = matchObj.Edibility;
@@ -372,98 +484,201 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     }
                 }
             }
-            catch {}
+            catch { }
         }
 
         // Classify the item name into beautiful granular categories (e.g. food, weapon, tool, ring, boots, book, fish, default)
         public static string GetItemCategory(string itemName)
         {
-            if (string.IsNullOrEmpty(itemName)) return "default";
+            if (string.IsNullOrEmpty(itemName))
+                return "default";
             var lower = itemName.ToLowerInvariant();
-            
+
             // Weapons
-            if (lower.Contains("sword") || lower.Contains("blade") || lower.Contains("dagger") || 
-                lower.Contains("hammer") || lower.Contains("club") || lower.Contains("gavel") || 
-                lower.Contains("slingshot") || lower.Contains("scythe") || lower.Contains("mallet") || 
-                lower.Contains("falchion") || lower.Contains("cutlass") || lower.Contains("claymore") || 
-                lower.Contains("saber") || lower.Contains("rapier") || lower.Contains("kris") || 
-                lower.Contains("shank") || lower.Contains("dirk") || lower.Contains("mace") || 
-                lower.Contains("katana") || lower.Contains("glaive") || lower.Contains("spear") || 
-                lower.Contains("trident") || lower.Contains("cleaver"))
+            if (
+                lower.Contains("sword")
+                || lower.Contains("blade")
+                || lower.Contains("dagger")
+                || lower.Contains("hammer")
+                || lower.Contains("club")
+                || lower.Contains("gavel")
+                || lower.Contains("slingshot")
+                || lower.Contains("scythe")
+                || lower.Contains("mallet")
+                || lower.Contains("falchion")
+                || lower.Contains("cutlass")
+                || lower.Contains("claymore")
+                || lower.Contains("saber")
+                || lower.Contains("rapier")
+                || lower.Contains("kris")
+                || lower.Contains("shank")
+                || lower.Contains("dirk")
+                || lower.Contains("mace")
+                || lower.Contains("katana")
+                || lower.Contains("glaive")
+                || lower.Contains("spear")
+                || lower.Contains("trident")
+                || lower.Contains("cleaver")
+            )
             {
                 return "weapon";
             }
-            
+
             // Tools
-            if (lower.Contains("axe") || lower.Contains("pickaxe") || lower.Contains("hoe") || 
-                lower.Contains("watering can") || lower.Contains("shears") || lower.Contains("pail") || 
-                lower.Contains("rod") || lower.Contains("pan") || lower.Contains("flute") || 
-                lower.Contains("drum") || lower.Contains("bell") || lower.Contains("wand") || 
-                lower.Contains("scepter"))
+            if (
+                lower.Contains("axe")
+                || lower.Contains("pickaxe")
+                || lower.Contains("hoe")
+                || lower.Contains("watering can")
+                || lower.Contains("shears")
+                || lower.Contains("pail")
+                || lower.Contains("rod")
+                || lower.Contains("pan")
+                || lower.Contains("flute")
+                || lower.Contains("drum")
+                || lower.Contains("bell")
+                || lower.Contains("wand")
+                || lower.Contains("scepter")
+            )
             {
                 return "tool";
             }
-            
+
             // Rings
-            if (lower.Contains("ring") || lower.Contains("band") || lower.Contains("amulet") || 
-                lower.Contains("talisman"))
+            if (
+                lower.Contains("ring")
+                || lower.Contains("band")
+                || lower.Contains("amulet")
+                || lower.Contains("talisman")
+            )
             {
                 return "ring";
             }
-            
+
             // Boots
-            if (lower.Contains("boots") || lower.Contains("shoes") || lower.Contains("sneakers") || 
-                lower.Contains("heels") || lower.Contains("sandals"))
+            if (
+                lower.Contains("boots")
+                || lower.Contains("shoes")
+                || lower.Contains("sneakers")
+                || lower.Contains("heels")
+                || lower.Contains("sandals")
+            )
             {
                 return "boots";
             }
-            
+
             // Books
-            if (lower.Contains("book") || lower.Contains("guide") || lower.Contains("manual") || 
-                lower.Contains("journal") || lower.Contains("almanac") || lower.Contains("catalogue"))
+            if (
+                lower.Contains("book")
+                || lower.Contains("guide")
+                || lower.Contains("manual")
+                || lower.Contains("journal")
+                || lower.Contains("almanac")
+                || lower.Contains("catalogue")
+            )
             {
                 return "book";
             }
-            
+
             // Fish & Sea creatures
-            if (lower.Contains("fish") || lower.Contains("carp") || lower.Contains("catfish") || 
-                lower.Contains("shad") || lower.Contains("bream") || lower.Contains("chub") || 
-                lower.Contains("trout") || lower.Contains("bass") || lower.Contains("walleye") || 
-                lower.Contains("salmon") || lower.Contains("eel") || lower.Contains("squid") || 
-                lower.Contains("octopus") || lower.Contains("pufferfish") || lower.Contains("tuna") || 
-                lower.Contains("sardine") || lower.Contains("anchovy") || lower.Contains("herring") || 
-                lower.Contains("halibut") || lower.Contains("sturgeon") || lower.Contains("tilapia") || 
-                lower.Contains("cucumber") || lower.Contains("lobster") || lower.Contains("crab") || 
-                lower.Contains("crayfish") || lower.Contains("shrimp") || lower.Contains("snail") || 
-                lower.Contains("periwinkle") || lower.Contains("mussel") || lower.Contains("cockle") || 
-                lower.Contains("oyster") || lower.Contains("clam"))
+            if (
+                lower.Contains("fish")
+                || lower.Contains("carp")
+                || lower.Contains("catfish")
+                || lower.Contains("shad")
+                || lower.Contains("bream")
+                || lower.Contains("chub")
+                || lower.Contains("trout")
+                || lower.Contains("bass")
+                || lower.Contains("walleye")
+                || lower.Contains("salmon")
+                || lower.Contains("eel")
+                || lower.Contains("squid")
+                || lower.Contains("octopus")
+                || lower.Contains("pufferfish")
+                || lower.Contains("tuna")
+                || lower.Contains("sardine")
+                || lower.Contains("anchovy")
+                || lower.Contains("herring")
+                || lower.Contains("halibut")
+                || lower.Contains("sturgeon")
+                || lower.Contains("tilapia")
+                || lower.Contains("cucumber")
+                || lower.Contains("lobster")
+                || lower.Contains("crab")
+                || lower.Contains("crayfish")
+                || lower.Contains("shrimp")
+                || lower.Contains("snail")
+                || lower.Contains("periwinkle")
+                || lower.Contains("mussel")
+                || lower.Contains("cockle")
+                || lower.Contains("oyster")
+                || lower.Contains("clam")
+            )
             {
                 return "fish";
             }
-            
+
             // Foods (Eatables)
-            if (lower.Contains("cookie") || lower.Contains("cake") || lower.Contains("pie") || 
-                lower.Contains("soup") || lower.Contains("salad") || lower.Contains("dinner") || 
-                lower.Contains("wine") || lower.Contains("beer") || lower.Contains("juice") || 
-                lower.Contains("coffee") || lower.Contains("tea") || lower.Contains("milk") || 
-                lower.Contains("egg") || lower.Contains("cheese") || lower.Contains("honey") || 
-                lower.Contains("bread") || lower.Contains("candy") || lower.Contains("apple") || 
-                lower.Contains("peach") || lower.Contains("orange") || lower.Contains("cherry") || 
-                lower.Contains("pomegranate") || lower.Contains("apricot") || lower.Contains("banana") || 
-                lower.Contains("mango") || lower.Contains("melon") || lower.Contains("berry") || 
-                lower.Contains("grape") || lower.Contains("coconut") || lower.Contains("fruit") || 
-                lower.Contains("chocolate") || lower.Contains("stew") || lower.Contains("dish") || 
-                lower.Contains("taco") || lower.Contains("burger") || lower.Contains("pizza") || 
-                lower.Contains("roll") || lower.Contains("pasta") || lower.Contains("noodle") || 
-                lower.Contains("jelly") || lower.Contains("jam") || lower.Contains("butter") || 
-                lower.Contains("sauce") || lower.Contains("oil") || lower.Contains("sugar") || 
-                lower.Contains("salt") || lower.Contains("pepper") || lower.Contains("syrup") || 
-                lower.Contains("toast") || lower.Contains("pancake") || lower.Contains("waffle") || 
-                lower.Contains("omelet") || lower.Contains("scramble"))
+            if (
+                lower.Contains("cookie")
+                || lower.Contains("cake")
+                || lower.Contains("pie")
+                || lower.Contains("soup")
+                || lower.Contains("salad")
+                || lower.Contains("dinner")
+                || lower.Contains("wine")
+                || lower.Contains("beer")
+                || lower.Contains("juice")
+                || lower.Contains("coffee")
+                || lower.Contains("tea")
+                || lower.Contains("milk")
+                || lower.Contains("egg")
+                || lower.Contains("cheese")
+                || lower.Contains("honey")
+                || lower.Contains("bread")
+                || lower.Contains("candy")
+                || lower.Contains("apple")
+                || lower.Contains("peach")
+                || lower.Contains("orange")
+                || lower.Contains("cherry")
+                || lower.Contains("pomegranate")
+                || lower.Contains("apricot")
+                || lower.Contains("banana")
+                || lower.Contains("mango")
+                || lower.Contains("melon")
+                || lower.Contains("berry")
+                || lower.Contains("grape")
+                || lower.Contains("coconut")
+                || lower.Contains("fruit")
+                || lower.Contains("chocolate")
+                || lower.Contains("stew")
+                || lower.Contains("dish")
+                || lower.Contains("taco")
+                || lower.Contains("burger")
+                || lower.Contains("pizza")
+                || lower.Contains("roll")
+                || lower.Contains("pasta")
+                || lower.Contains("noodle")
+                || lower.Contains("jelly")
+                || lower.Contains("jam")
+                || lower.Contains("butter")
+                || lower.Contains("sauce")
+                || lower.Contains("oil")
+                || lower.Contains("sugar")
+                || lower.Contains("salt")
+                || lower.Contains("pepper")
+                || lower.Contains("syrup")
+                || lower.Contains("toast")
+                || lower.Contains("pancake")
+                || lower.Contains("waffle")
+                || lower.Contains("omelet")
+                || lower.Contains("scramble")
+            )
             {
                 return "food";
             }
-            
+
             return "default";
         }
     }

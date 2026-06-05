@@ -20,12 +20,21 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         {
             // "Connected to Archipelago as {slot}. Type !!help for client commands"
             (
-                new Regex(@"^Connected to Archipelago as (.+?)\.\s*Type !!help for client commands$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-                m => ModEntry.Translation.Get("chat.connected", new { slot = m.Groups[1].Value }).ToString()
+                new Regex(
+                    @"^Connected to Archipelago as (.+?)\.\s*Type !!help for client commands$",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                m =>
+                    ModEntry
+                        .Translation.Get("chat.connected", new { slot = m.Groups[1].Value })
+                        .ToString()
             ),
             // "A Fatal error has occurred while initializing Archipelago. Check SMAPI for details to report the problem"
             (
-                new Regex(@"^A Fatal error has occurred while initializing Archipelago\.", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+                new Regex(
+                    @"^A Fatal error has occurred while initializing Archipelago\.",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
                 _ => ModEntry.Translation.Get("chat.fatal_error").ToString()
             ),
         };
@@ -35,7 +44,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(message)) return true;
+                if (string.IsNullOrWhiteSpace(message))
+                    return true;
 
                 foreach (var (pattern, translate) in _rules)
                 {
@@ -53,7 +63,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in DirectChatPatcher: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in DirectChatPatcher: {ex.Message}",
+                    StardewModdingAPI.LogLevel.Trace
+                );
             }
             return true; // Always run original — we only mutate 'message' in place
         }

@@ -1,10 +1,10 @@
 using System;
 using System.Reflection;
 using HarmonyLib;
-using StardewModdingAPI;
-using StardewValley.Menus;
 using StardewArchipelago.Locations.CodeInjections.Vanilla.Bundles;
 using StardewArchipelago.Locations.CodeInjections.Vanilla.Bundles.Remakes;
+using StardewModdingAPI;
+using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
@@ -16,51 +16,84 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             try
             {
                 var menuType = typeof(ArchipelagoJunimoNoteMenu);
-                var constructors = menuType.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-                var postfix = new HarmonyMethod(typeof(JunimoNoteMenuRemake_Constructor_Patch), nameof(JunimoNoteMenuRemake_Constructor_Patch.Postfix));
+                var constructors = menuType.GetConstructors(
+                    BindingFlags.Instance | BindingFlags.Public
+                );
+                var postfix = new HarmonyMethod(
+                    typeof(JunimoNoteMenuRemake_Constructor_Patch),
+                    nameof(JunimoNoteMenuRemake_Constructor_Patch.Postfix)
+                );
                 foreach (var ctor in constructors)
                 {
                     harmony.Patch(ctor, postfix: postfix);
                 }
-                ModEntry.Instance.Monitor.Log("Successfully patched ArchipelagoJunimoNoteMenu constructors!", LogLevel.Info);
+                ModEntry.Instance.Monitor.Log(
+                    "Successfully patched ArchipelagoJunimoNoteMenu constructors!",
+                    LogLevel.Info
+                );
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Failed to patch ArchipelagoJunimoNoteMenu constructors: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Failed to patch ArchipelagoJunimoNoteMenu constructors: {ex}",
+                    LogLevel.Error
+                );
             }
 
             // Patch JunimoNoteMenuRemake constructors dynamically
             try
             {
                 var remakeMenuType = typeof(JunimoNoteMenuRemake);
-                var constructors = remakeMenuType.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-                var postfix = new HarmonyMethod(typeof(JunimoNoteMenuRemake_Constructor_Patch), nameof(JunimoNoteMenuRemake_Constructor_Patch.Postfix));
+                var constructors = remakeMenuType.GetConstructors(
+                    BindingFlags.Instance | BindingFlags.Public
+                );
+                var postfix = new HarmonyMethod(
+                    typeof(JunimoNoteMenuRemake_Constructor_Patch),
+                    nameof(JunimoNoteMenuRemake_Constructor_Patch.Postfix)
+                );
                 foreach (var ctor in constructors)
                 {
                     harmony.Patch(ctor, postfix: postfix);
                 }
-                ModEntry.Instance.Monitor.Log("Successfully patched JunimoNoteMenuRemake constructors!", LogLevel.Info);
+                ModEntry.Instance.Monitor.Log(
+                    "Successfully patched JunimoNoteMenuRemake constructors!",
+                    LogLevel.Info
+                );
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Failed to patch JunimoNoteMenuRemake constructors: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Failed to patch JunimoNoteMenuRemake constructors: {ex}",
+                    LogLevel.Error
+                );
             }
 
             // Patch ArchipelagoBundle constructors dynamically
             try
             {
                 var bundleType = typeof(ArchipelagoBundle);
-                var constructors = bundleType.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-                var postfix = new HarmonyMethod(typeof(ArchipelagoBundle_Constructor_Patch), nameof(ArchipelagoBundle_Constructor_Patch.Postfix));
+                var constructors = bundleType.GetConstructors(
+                    BindingFlags.Instance | BindingFlags.Public
+                );
+                var postfix = new HarmonyMethod(
+                    typeof(ArchipelagoBundle_Constructor_Patch),
+                    nameof(ArchipelagoBundle_Constructor_Patch.Postfix)
+                );
                 foreach (var ctor in constructors)
                 {
                     harmony.Patch(ctor, postfix: postfix);
                 }
-                ModEntry.Instance.Monitor.Log("Successfully patched ArchipelagoBundle constructors!", LogLevel.Info);
+                ModEntry.Instance.Monitor.Log(
+                    "Successfully patched ArchipelagoBundle constructors!",
+                    LogLevel.Info
+                );
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Failed to patch ArchipelagoBundle constructors: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Failed to patch ArchipelagoBundle constructors: {ex}",
+                    LogLevel.Error
+                );
             }
         }
     }
@@ -77,7 +110,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     {
                         foreach (var bundle in menu.bundles)
                         {
-                            var localizedLabel = TranslationHelper.GetLocalizedBundleName(bundle.name);
+                            var localizedLabel = TranslationHelper.GetLocalizedBundleName(
+                                bundle.name
+                            );
                             if (localizedLabel != bundle.name)
                             {
                                 bundle.label = localizedLabel;
@@ -88,7 +123,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in JunimoNoteMenu Constructor Postfix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in JunimoNoteMenu Constructor Postfix: {ex}",
+                    LogLevel.Error
+                );
             }
         }
     }
@@ -105,7 +143,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     {
                         foreach (var bundle in menu.Bundles)
                         {
-                            var localizedLabel = TranslationHelper.GetLocalizedBundleName(bundle.name);
+                            var localizedLabel = TranslationHelper.GetLocalizedBundleName(
+                                bundle.name
+                            );
                             if (localizedLabel != bundle.name)
                             {
                                 bundle.label = localizedLabel;
@@ -116,7 +156,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in JunimoNoteMenuRemake Constructor Postfix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in JunimoNoteMenuRemake Constructor Postfix: {ex}",
+                    LogLevel.Error
+                );
             }
         }
     }
@@ -129,7 +172,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             {
                 if (__instance is BundleRemake bundleRemake)
                 {
-                    var localizedLabel = TranslationHelper.GetLocalizedBundleName(bundleRemake.name);
+                    var localizedLabel = TranslationHelper.GetLocalizedBundleName(
+                        bundleRemake.name
+                    );
                     if (localizedLabel != bundleRemake.name)
                     {
                         bundleRemake.label = localizedLabel;
@@ -137,7 +182,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 }
                 else if (__instance is StardewValley.Menus.Bundle vanillaBundle)
                 {
-                    var localizedLabel = TranslationHelper.GetLocalizedBundleName(vanillaBundle.name);
+                    var localizedLabel = TranslationHelper.GetLocalizedBundleName(
+                        vanillaBundle.name
+                    );
                     if (localizedLabel != vanillaBundle.name)
                     {
                         vanillaBundle.label = localizedLabel;
@@ -146,7 +193,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
             catch (Exception ex)
             {
-                ModEntry.Instance.Monitor.Log($"Error in ArchipelagoBundle Constructor Postfix: {ex}", LogLevel.Error);
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in ArchipelagoBundle Constructor Postfix: {ex}",
+                    LogLevel.Error
+                );
             }
         }
     }

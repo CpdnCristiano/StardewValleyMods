@@ -93,3 +93,27 @@ Legacy templates using `{0}`, `{1}`, `{2}`, `{3}` format indexes are also suppor
 
 Run these commands in your SMAPI console:
 *   **`ap_pt_mem`**: Displays the active cache entry count and estimated physical RAM size of the translation mod.
+
+---
+
+## License
+
+```
+Copyright (c) 2026 Cristiano Nascimento
+GitHub: CPDNCRISTIANO
+
+All Rights Reserved.
+
+Permission is granted to use this mod for personal, non-commercial purposes only.
+
+You may not:
+- Redistribute this mod in any form.
+- Upload or publish this mod on any website, platform, or repository without prior written permission from the author.
+- Modify and redistribute this mod.
+- Use any part of this mod's source code, assets, or content in other projects.
+- Sell, sublicense, or otherwise commercially exploit this mod.
+
+This mod is provided "as is", without warranty of any kind.
+
+By using this mod, you agree to these terms.
+```
