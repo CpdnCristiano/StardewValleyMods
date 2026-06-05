@@ -47,8 +47,16 @@ jobs:
             /p:EnableModDeploy=false \
             /p:EnableModZip=true \
             /p:ModZipPath="$GITHUB_WORKSPACE/dist"
-          echo "dist output: $(ls dist)"
-          ZIP_NAME="$(ls dist/*.zip | head -1 | xargs basename)"
+
+          # Renomear o zip para incluir a tag (ex: StardewArchipelagoTranslations-apt-v1.0.0.zip)
+          ORIGINAL_ZIP="$(ls dist/*.zip | head -1)"
+          if [[ "$GITHUB_REF_NAME" == apt-v* ]]; then
+            ZIP_NAME="StardewArchipelagoTranslations-${GITHUB_REF_NAME}.zip"
+          else
+            ZIP_NAME="$(basename "$ORIGINAL_ZIP")"
+          fi
+          mv "$ORIGINAL_ZIP" "dist/$ZIP_NAME"
+          echo "Arquivo gerado: dist/$ZIP_NAME"
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
         env:
           DOTNET_NOLOGO: true
