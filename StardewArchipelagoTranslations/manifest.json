@@ -1,7 +1,7 @@
 {
   "Name": "Stardew Archipelago Translations",
   "Author": "CpdnCristiano",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "Description": "Standalone multilingual translation mod for StardewArchipelago using Harmony patches",
   "UniqueID": "CpdnCristiano.StardewArchipelagoTranslations",
   "EntryDll": "StardewArchipelagoTranslations.dll",

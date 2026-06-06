@@ -115,6 +115,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _locationResolvers.Add(new MoviesanityResolver());
                 _locationResolvers.Add(new EatsanityResolver());
                 _locationResolvers.Add(new FriendsanityResolver());
+                _locationResolvers.Add(new MonsterEradicationResolver());
                 _locationResolvers.Add(new DefaultLocationResolver());
             }
         }
