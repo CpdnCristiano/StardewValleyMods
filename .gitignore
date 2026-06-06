@@ -19,3 +19,5 @@ _releases/
 /*/bin
 /*/obj
 *.ps1
+/dist
+release.ps1
