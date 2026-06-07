@@ -19,8 +19,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         internal static readonly object _objectsLock = new object();
         internal static Dictionary<string, string>? _vanillaPowersNameMap;
         internal static readonly object _powersLock = new object();
-        private static Dictionary<string, int>? _questCodeByEnglishTitle;
-        private static readonly object _questsLock = new object();
 
         // Maps Archipelago item names for TV channels to the game's own content string keys
         internal static readonly Dictionary<string, string> _tvChannelGameStringKeys = new(
@@ -54,6 +52,172 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static LocalizedContentManager.LanguageCode _cachesLang =
             (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _cachesLock = new object();
+
+        // Cache O(1) para Dias da Semana (Lazy Initialization)
+        private static Dictionary<string, string>? _weekdayCache;
+        private static readonly object _weekdayCacheLock = new object();
+
+        // Mapa global EN → idioma do jogo, construído uma vez ao abrir o save
+        // Chave: string em inglês (ex: "Saturday")  Valor: string localizada (ex: "Sábado")
+        internal static readonly Dictionary<string, string> _gameStringMap = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private static readonly object _gameStringMapLock = new object();
+
+        private static readonly string[] _stringAssets = new[]
+        {
+            "Strings/StringsFromCSFiles",
+            "Strings/StringsFromMaps",
+            "Strings/Locations",
+            "Strings/UI",
+            "Strings/Events",
+            "Strings/Notes",
+            "Strings/Speech",
+        };
+
+        /// <summary>
+        /// Carrega todas as strings do jogo em EN e no idioma atual e constrói
+        /// um dicionário EN→localizado. Deve ser chamado no SaveLoaded.
+        /// </summary>
+        public static void BuildGameStringMap()
+        {
+            lock (_gameStringMapLock)
+            {
+                _gameStringMap.Clear();
+
+                // Content manager puro (sem localização) para pegar o EN
+                using var rawManager = new Microsoft.Xna.Framework.Content.ContentManager(
+                    Game1.game1.Content.ServiceProvider,
+                    Game1.game1.Content.RootDirectory
+                );
+
+                var gameContent = ModEntry.Instance.Helper.GameContent;
+                var loaded = 0;
+
+                foreach (var asset in _stringAssets)
+                {
+                    try
+                    {
+                        // Carrega EN com barra invertida (formato XNB raw)
+                        var rawAsset = asset.Replace('/', '\\');
+                        var enStrings = rawManager.Load<Dictionary<string, string>>(rawAsset);
+
+                        // Carrega localizado via SMAPI (barra normal)
+                        var ptStrings = gameContent.Load<Dictionary<string, string>>(asset);
+
+                        foreach (var pair in enStrings)
+                        {
+                            if (string.IsNullOrWhiteSpace(pair.Value))
+                                continue;
+                            if (
+                                !ptStrings.TryGetValue(pair.Key, out var ptVal)
+                                || string.IsNullOrWhiteSpace(ptVal)
+                            )
+                                continue;
+
+                            // Só adiciona se a tradução for diferente do inglês
+                            // (evita sobrescrever com strings iguais)
+                            _gameStringMap.TryAdd(pair.Value.Trim(), ptVal.Trim());
+                            loaded++;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Asset não encontrado — ignora
+                    }
+                }
+
+                ModEntry.Instance.Monitor.Log(
+                    $"[GameStringMap] {loaded} strings EN→PT carregadas.",
+                    LogLevel.Debug
+                );
+            }
+        }
+
+        /// <summary>
+        /// Tenta traduzir qualquer string do jogo usando o mapa global EN→PT.
+        /// </summary>
+        public static bool TryGetLocalizedGameString(string english, out string localized)
+        {
+            lock (_gameStringMapLock)
+            {
+                return _gameStringMap.TryGetValue(english.Trim(), out localized!);
+            }
+        }
+
+        /// <summary>
+        /// Obtém o nome localizado do dia da semana de forma otimizada O(1) e Case Insensitive,
+        /// aproveitando as respostas da pergunta do Scholar (1.6).
+        /// </summary>
+        internal static string GetLocalizedWeekday(string englishWeekday)
+        {
+            if (string.IsNullOrWhiteSpace(englishWeekday))
+                return englishWeekday;
+
+            // Inicialização "Lazy" - Cria o cache apenas na primeira vez que for necessário
+            if (_weekdayCache == null)
+            {
+                lock (_weekdayCacheLock)
+                {
+                    if (_weekdayCache == null)
+                    {
+                        var newCache = new Dictionary<string, string>(
+                            StringComparer.OrdinalIgnoreCase
+                        );
+                        try
+                        {
+                            // Ordem exata da resposta no asset Scholar_Question_1_2_Answers
+                            string[] engDays =
+                            {
+                                "Wednesday",
+                                "Thursday",
+                                "Tuesday",
+                                "Monday",
+                                "Saturday",
+                                "Sunday",
+                                "Friday",
+                            };
+
+                            // Carrega a string localizada do idioma em uso
+                            string locString = Game1.content.LoadString(
+                                "Strings\\1_6_Strings:Scholar_Question_1_2_Answers"
+                            );
+                            string[] locDays = locString.Split(',');
+
+                            // Verifica consistência antes de parear
+                            if (engDays.Length == locDays.Length)
+                            {
+                                for (int i = 0; i < engDays.Length; i++)
+                                {
+                                    newCache[engDays[i]] = locDays[i].Trim();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ModEntry.Instance.Monitor.Log(
+                                $"[WeekdayCache] Error building cache: {ex.Message}",
+                                LogLevel.Trace
+                            );
+                        }
+
+                        _weekdayCache = newCache;
+                    }
+                }
+            }
+
+            // Busca instantânea O(1) ignorando maiúsculas/minúsculas
+            if (_weekdayCache.TryGetValue(englishWeekday.Trim(), out var localized))
+            {
+                return localized;
+            }
+
+            // Fallback para o mapa global caso por algum motivo a busca falhe
+            if (TryGetLocalizedGameString(englishWeekday, out var globalLocalized))
+                return globalLocalized;
+
+            return englishWeekday;
+        }
 
         private static readonly List<IItemResolver> _itemResolvers = new();
         private static readonly List<ILocationResolver> _locationResolvers = new();
@@ -243,8 +407,16 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         _resolvedLocationNamesCache.Clear();
                         _translatedDescriptionsCache.Clear();
                         _localizedBundleNamesCache.Clear();
+
+                        // Limpa os dicionários de cache quando o idioma muda
                         _vanillaObjectsNameMap = null;
                         _vanillaPowersNameMap = null;
+
+                        lock (_weekdayCacheLock)
+                        {
+                            _weekdayCache = null; // Força recarregamento dos dias da semana
+                        }
+
                         _cachesLang = currentLang;
                         ModEntry.Instance.Monitor.Log(
                             $"Cleared translation caches due to language change to {currentLang}",
@@ -404,6 +576,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 bytes += CalculateExactDictSize(_translatedDescriptionsCache, ref cachesCount);
                 bytes += CalculateExactDictSize(_localizedBundleNamesCache, ref cachesCount);
             }
+
+            lock (_weekdayCacheLock)
+            {
+                bytes += CalculateExactDictSize(_weekdayCache, ref cachesCount);
+            }
+
             cacheEntries = cachesCount;
 
             int indexesCount = 0;

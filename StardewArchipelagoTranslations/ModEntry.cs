@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher;
 using HarmonyLib;
@@ -45,6 +47,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             // Pre-populate translation caches when the save is loaded to ensure zero gameplay delay
             helper.Events.GameLoop.SaveLoaded += (sender, e) =>
             {
+                TranslationHelper.BuildGameStringMap();
                 TranslationHelper.PrepopulateCaches();
                 TranslationHelper.ResetPreScout();
                 ScoutPatcher.ClearCache();
@@ -204,6 +207,129 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     {
                         Monitor.Log($"Failed to measure memory usage: {ex}", LogLevel.Error);
                     }
+                }
+            );
+            helper.ConsoleCommands.Add(
+                "dump_game_strings",
+                "Salva todas as strings do jogo (EN + PT) em um JSON na pasta do mod. Uso: dump_game_strings [filtro_opcional]",
+                (command, args) =>
+                {
+                    var filter = args.Length > 0 ? string.Join(" ", args) : null;
+                    var outputPath = Path.Combine(
+                        helper.DirectoryPath,
+                        $"dump_strings_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+                    );
+
+                    // Lista expandida com os dicionários do Stardew Valley 1.6+
+                    var stringAssets = new[]
+                    {
+                        // === CORE, UI & MAPAS ===
+                        "Strings\\StringsFromCSFiles",
+                        "Strings\\StringsFromMaps",
+                        "Strings\\UI",
+                        "Strings\\1_6_Strings", // Fundamental para a versão 1.6 em diante
+                        "Strings\\Locations",
+                        // === ITENS, FERRAMENTAS & EQUIPAMENTOS ===
+                        "Strings\\Objects", // Itens normais, recursos, comidas, sementes
+                        "Strings\\BigCraftables", // Máquinas, espantalhos, baús
+                        "Strings\\Weapons", // Espadas, adagas, porretes
+                        "Strings\\Tools", // Enxadas, regadores, picaretas
+                        "Strings\\Boots", // Botas e sapatos
+                        "Strings\\Hats", // Chapéus
+                        "Strings\\Clothing", // Roupas, camisas, calças
+                        "Strings\\Furniture", // Móveis de decoração
+                        // === QUESTS, CARTAS & HISTÓRIA ===
+                        "Strings\\Quests", // Missões normais do correio/diário
+                        "Strings\\SpecialOrderStrings", // Pedidos Especiais (Quadro gigante)
+                        "Strings\\Notes", // Recados Secretos
+                        "Strings\\Events", // Falas dos eventos de coração/cutscenes
+                        "Strings\\Mail", // Cartas recebidas pelo correio
+                        // === NPCs, PERSONAGENS & MONSTROS ===
+                        "Strings\\NPCNames", // Lista de Nomes dos NPCs
+                        "Strings\\Characters", // Textos variados de personagens
+                        "Strings\\schedules", // Textos que eles dizem durante as rotinas
+                        "Strings\\Monsters", // Nomes de monstros
+                        // === OUTROS SISTEMAS DO JOGO ===
+                        "Strings\\Buildings", // Nomes de construções da fazenda (Celeiro, Galinheiro)
+                        "Strings\\BundleNames", // Nomes dos conjuntos do Centro Comunitário
+                        "Strings\\Crops", // Textos de plantações
+                        "Strings\\EnchantmentNames", // Encantamentos da Forja do Vulcão
+                        "Strings\\FishPondAnswers", // Respostas e pedidos dos Lagos de Peixes
+                        // === PASTAS DE DADOS ESPECÍFICOS (ONDE FICAM ALGUMAS QUESTS E DIÁLOGOS) ===
+                        "Data\\Quests", // <-- AQUI ESTÁ A "INTRODUCTIONS" E OUTRAS MISSÕES
+                        "Data\\Mail", // O conteúdo completo das cartas recebidas
+                        "Data\\Events\\Town", // Eventos da cidade
+                        "Data\\Festivals\\spring13", // Exemplo: Caça aos ovos
+                        "Data\\Festivals\\spring24", // Exemplo: Dança das Flores
+                        "Data\\Festivals\\fall8", // Exemplo: Feira
+                        "Data\\Festivals\\fall27", // Exemplo: Labirinto
+                        "Data\\Festivals\\winter8", // Exemplo: Festival do Gelo
+                        "Data\\Festivals\\winter25", // Exemplo: Estrela Invernal
+                    };
+
+                    var result = new Dictionary<string, Dictionary<string, object>>();
+
+                    using var engManager = new Microsoft.Xna.Framework.Content.ContentManager(
+                        Game1.content.ServiceProvider, // Usando Game1.content diretamente (mais seguro na 1.6)
+                        Game1.content.RootDirectory
+                    );
+
+                    var totalKeys = 0;
+                    foreach (var asset in stringAssets)
+                    {
+                        try
+                        {
+                            // Carrega o original em inglês (base) e o localizado (PT-BR)
+                            var engStrings = engManager.Load<Dictionary<string, string>>(asset);
+                            var locStrings = Game1.content.Load<Dictionary<string, string>>(asset);
+
+                            foreach (var pair in engStrings)
+                            {
+                                // Filtro de busca (case-insensitive)
+                                if (
+                                    filter != null
+                                    && !pair.Key.Contains(
+                                        filter,
+                                        StringComparison.OrdinalIgnoreCase
+                                    )
+                                    && !pair.Value.Contains(
+                                        filter,
+                                        StringComparison.OrdinalIgnoreCase
+                                    )
+                                )
+                                    continue;
+
+                                locStrings.TryGetValue(pair.Key, out var locVal);
+                                var fullKey = $"{asset}:{pair.Key}";
+
+                                result[fullKey] = new Dictionary<string, object>
+                                {
+                                    ["asset"] = asset,
+                                    ["key"] = pair.Key,
+                                    ["en"] = pair.Value,
+                                    ["pt"] = locVal ?? "",
+                                };
+                                totalKeys++;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Monitor.Log(
+                                $"Falha ao carregar '{asset}': {ex.Message}",
+                                LogLevel.Warn
+                            );
+                        }
+                    }
+
+                    var json = System.Text.Json.JsonSerializer.Serialize(
+                        result,
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true }
+                    );
+                    File.WriteAllText(outputPath, json);
+
+                    Monitor.Log($"✅ {totalKeys} keys salvas em: {outputPath}", LogLevel.Info);
+                    if (filter != null)
+                        Monitor.Log($"   (filtradas por '{filter}')", LogLevel.Info);
                 }
             );
         }

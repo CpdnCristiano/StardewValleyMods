@@ -120,68 +120,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             return true;
         }
 
-        internal static bool TryResolveTravelingMerchantItemName(
-            string englishItemName,
-            out string localizedItemName
-        )
-        {
-            localizedItemName = englishItemName;
 
-            const string dayPrefix = "Traveling Merchant: ";
-            if (englishItemName.StartsWith(dayPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var englishDay = englishItemName.Substring(dayPrefix.Length).Trim();
-                var localizedDay = GetLocalizedWeekday(englishDay);
-                localizedItemName = ModEntry
-                    .Translation.Get(
-                        "item.traveling_merchant_day_format",
-                        new { day = localizedDay }
-                    )
-                    .ToString();
-                return true;
-            }
-
-            if (
-                englishItemName.Equals(
-                    "Traveling Merchant Stock Size",
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-            {
-                localizedItemName = ModEntry
-                    .Translation.Get("item.traveling_merchant_stock_size")
-                    .ToString();
-                return true;
-            }
-
-            if (
-                englishItemName.Equals(
-                    "Traveling Merchant Discount",
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-            {
-                localizedItemName = ModEntry
-                    .Translation.Get("item.traveling_merchant_discount")
-                    .ToString();
-                return true;
-            }
-
-            if (
-                englishItemName.Equals(
-                    "Traveling Merchant Metal Detector",
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-            {
-                localizedItemName = ModEntry
-                    .Translation.Get("item.traveling_merchant_metal_detector")
-                    .ToString();
-                return true;
-            }
-
-            return false;
-        }
 
         internal static bool RecipeExists(string recipeName, bool isCooking)
         {

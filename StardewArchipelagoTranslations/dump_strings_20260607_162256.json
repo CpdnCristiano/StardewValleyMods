@@ -1,0 +1,62 @@
+{
+  "Strings\\StringsFromCSFiles:Event.cs.1820": {
+    "asset": "Strings\\StringsFromCSFiles",
+    "key": "Event.cs.1820",
+    "en": "Ahh... Indeed. I see you in a room, having a conversation with a man.",
+    "pt": "Ah... certo. Vejo voc\u00EA em uma sala, conversando com um homem."
+  },
+  "Strings\\StringsFromCSFiles:Event.cs.1821": {
+    "asset": "Strings\\StringsFromCSFiles",
+    "key": "Event.cs.1821",
+    "en": "Ahh... Indeed. I see you in a room, having a conversation with a lady.",
+    "pt": "Ah... certo. Vejo voc\u00EA em uma sala, conversando com uma mulher."
+  },
+  "Strings\\StringsFromCSFiles:Game1.cs.3048": {
+    "asset": "Strings\\StringsFromCSFiles",
+    "key": "Game1.cs.3048",
+    "en": "Sat",
+    "pt": "S\u00E1b"
+  },
+  "Strings\\StringsFromCSFiles:ItemDeliveryQuest.cs.13373": {
+    "asset": "Strings\\StringsFromCSFiles",
+    "key": "ItemDeliveryQuest.cs.13373",
+    "en": "Stardew Valley Meals Service is looking for a temporary worker on {0} to deliver {1} to {2}. Compensation upon delivery.",
+    "pt": "O Servi\u00E7o de refei\u00E7\u00F5es do Vale do Orvalho est\u00E1 procurando por um trabalhador tempor\u00E1rio no {0} para entregar {1} para {2}. Pagamento na entrega."
+  },
+  "Strings\\StringsFromCSFiles:ItemDeliveryQuest.cs.13555": {
+    "asset": "Strings\\StringsFromCSFiles",
+    "key": "ItemDeliveryQuest.cs.13555",
+    "en": "Ah, the item I requested.#$b#Your work was satisfactory. Here is your compensation.",
+    "pt": "Ah, o item que eu pedi.#$b#Seu trabalho foi satisfat\u00F3rio. Aqui est\u00E1 o pagamento."
+  },
+  "Strings\\StringsFromMaps:JojaMart.94": {
+    "asset": "Strings\\StringsFromMaps",
+    "key": "JojaMart.94",
+    "en": "JojaMeal... It\u0027s like corn meal but more versatile. It can be used for baking, thickening and sweetening. Mix it with water to make our signature gravy.",
+    "pt": "Farinha Sint\u00E9tica Joja: \u00E9 como farinha de milho, por\u00E9m mais vers\u00E1til. Pode ser utilizada para cozinhar, engrossar e ado\u00E7ar. Misture com \u00E1gua para fazer nosso famoso molho. "
+  },
+  "Strings\\StringsFromMaps:MovieTheater_RedCapGuy2": {
+    "asset": "Strings\\StringsFromMaps",
+    "key": "MovieTheater_RedCapGuy2",
+    "en": "Man: I sat in the front row... big mistake.",
+    "pt": "Homem: Eu sentei na fila da frente... grande erro."
+  },
+  "Strings\\UI:TitleMenu_PressAToStart": {
+    "asset": "Strings\\UI",
+    "key": "TitleMenu_PressAToStart",
+    "en": "PRESS @ TO START",
+    "pt": "PRESSIONE @ PARA COME\u00C7AR"
+  },
+  "Strings\\UI:PondQuery_StatusRequestComplete_Stiff1": {
+    "asset": "Strings\\UI",
+    "key": "PondQuery_StatusRequestComplete_Stiff1",
+    "en": "\u0022This {0} is satisfactory for our needs.\u0022",
+    "pt": "\u0022{0} \u00E9 satisfat\u00F3rio para nossas necessidades.\u0022"
+  },
+  "Strings\\UI:PondQuery_StatusRequestComplete_Stiff2": {
+    "asset": "Strings\\UI",
+    "key": "PondQuery_StatusRequestComplete_Stiff2",
+    "en": "The fish look satisfied with the {0}.",
+    "pt": "Os peixes parecem satisfeitos com {0}."
+  }
+}
