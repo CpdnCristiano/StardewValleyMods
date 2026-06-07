@@ -120,7 +120,67 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             return true;
         }
 
+        // NOVO: Cache de altíssima performance para não instanciar CraftingRecipe repetidas vezes
+        private static readonly Dictionary<string, string> _recipeNameCache = new(
+            StringComparer.OrdinalIgnoreCase
+        );
+        private static readonly object _recipeCacheLock = new object();
 
+        internal static bool TryGetLocalizedRecipeName(string recipeName, out string localizedName)
+        {
+            // 1. Tenta buscar no cache O(1) primeiro
+            lock (_recipeCacheLock)
+            {
+                if (_recipeNameCache.TryGetValue(recipeName, out localizedName!))
+                {
+                    return true;
+                }
+            }
+
+            localizedName = recipeName;
+            try
+            {
+                string? foundName = null;
+
+                // 2. Verifica primeiro nas receitas de culinária
+                var cookingRecipes = DataLoader.CookingRecipes(Game1.content);
+                if (cookingRecipes != null && cookingRecipes.ContainsKey(recipeName))
+                {
+                    var recipe = new CraftingRecipe(recipeName, isCookingRecipe: true);
+                    foundName = recipe.DisplayName;
+                }
+                // 3. Depois verifica nas receitas de artesanato (Crafting)
+                else
+                {
+                    var craftingRecipes = DataLoader.CraftingRecipes(Game1.content);
+                    if (craftingRecipes != null && craftingRecipes.ContainsKey(recipeName))
+                    {
+                        var recipe = new CraftingRecipe(recipeName, isCookingRecipe: false);
+                        foundName = recipe.DisplayName;
+                    }
+                }
+
+                // 4. Se encontrou, salva no cache para a próxima vez
+                if (foundName != null)
+                {
+                    localizedName = foundName;
+                    lock (_recipeCacheLock)
+                    {
+                        _recipeNameCache[recipeName] = localizedName;
+                    }
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Instance.Monitor.Log(
+                    $"Erro ao tentar obter a tradução nativa da receita '{recipeName}': {ex.Message}",
+                    LogLevel.Trace
+                );
+            }
+
+            return false;
+        }
 
         internal static bool RecipeExists(string recipeName, bool isCooking)
         {
