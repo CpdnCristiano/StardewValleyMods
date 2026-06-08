@@ -10,32 +10,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public static partial class TranslationHelper
     {
-        private static Dictionary<string, string>? _vanillaBundlesMap;
-        private static readonly object _bundlesLock = new object();
-        private static LocalizedContentManager.LanguageCode _vanillaBundlesLang =
-            (LocalizedContentManager.LanguageCode)(-1);
-
-        internal static Dictionary<string, string>? _vanillaObjectsNameMap;
-        internal static readonly object _objectsLock = new object();
-        internal static Dictionary<string, string>? _vanillaPowersNameMap;
-        internal static readonly object _powersLock = new object();
-
-        // Maps Archipelago item names for TV channels to the game's own content string keys
-        internal static readonly Dictionary<string, string> _tvChannelGameStringKeys = new(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            { "Weather Report", "Strings\\StringsFromCSFiles:TV.cs.13105" },
-            { "Fortune Teller", "Strings\\StringsFromCSFiles:TV.cs.13107" },
-            { "Livin' Off The Land", "Strings\\StringsFromCSFiles:TV.cs.13111" },
-            { "The Queen of Sauce", "Strings\\StringsFromCSFiles:TV.cs.13114" },
-            { "The Queen of Sauce (Re-run)", "Strings\\StringsFromCSFiles:TV.cs.13117" },
-            {
-                "Fishing Information Broadcasting Service",
-                "Strings\\StringsFromCSFiles:TV_Fishing_Channel"
-            },
-        };
-
         // Performance Caches
         private static readonly Dictionary<string, string> _resolvedItemNamesCache = new(
             StringComparer.OrdinalIgnoreCase
@@ -46,16 +20,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static readonly Dictionary<string, string> _translatedDescriptionsCache = new(
             StringComparer.OrdinalIgnoreCase
         );
-        private static readonly Dictionary<string, string> _localizedBundleNamesCache = new(
-            StringComparer.OrdinalIgnoreCase
-        );
         private static LocalizedContentManager.LanguageCode _cachesLang =
             (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _cachesLock = new object();
-
-        // Cache O(1) para Dias da Semana (Lazy Initialization)
-        private static Dictionary<string, string>? _weekdayCache;
-        private static readonly object _weekdayCacheLock = new object();
 
         // Mapa global EN → idioma do jogo, construído uma vez ao abrir o save
         // Chave: string em inglês (ex: "Saturday")  Valor: string localizada (ex: "Sábado")
@@ -145,78 +112,22 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
         }
 
-        /// <summary>
-        /// Obtém o nome localizado do dia da semana de forma otimizada O(1) e Case Insensitive,
-        /// aproveitando as respostas da pergunta do Scholar (1.6).
-        /// </summary>
-        internal static string GetLocalizedWeekday(string englishWeekday)
+        internal static void ClearGameStringMap()
         {
-            if (string.IsNullOrWhiteSpace(englishWeekday))
-                return englishWeekday;
-
-            // Inicialização "Lazy" - Cria o cache apenas na primeira vez que for necessário
-            if (_weekdayCache == null)
+            lock (_gameStringMapLock)
             {
-                lock (_weekdayCacheLock)
-                {
-                    if (_weekdayCache == null)
-                    {
-                        var newCache = new Dictionary<string, string>(
-                            StringComparer.OrdinalIgnoreCase
-                        );
-                        try
-                        {
-                            // Ordem exata da resposta no asset Scholar_Question_1_2_Answers
-                            string[] engDays =
-                            {
-                                "Wednesday",
-                                "Thursday",
-                                "Tuesday",
-                                "Monday",
-                                "Saturday",
-                                "Sunday",
-                                "Friday",
-                            };
-
-                            // Carrega a string localizada do idioma em uso
-                            string locString = Game1.content.LoadString(
-                                "Strings\\1_6_Strings:Scholar_Question_1_2_Answers"
-                            );
-                            string[] locDays = locString.Split(',');
-
-                            // Verifica consistência antes de parear
-                            if (engDays.Length == locDays.Length)
-                            {
-                                for (int i = 0; i < engDays.Length; i++)
-                                {
-                                    newCache[engDays[i]] = locDays[i].Trim();
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            ModEntry.Instance.Monitor.Log(
-                                $"[WeekdayCache] Error building cache: {ex.Message}",
-                                LogLevel.Trace
-                            );
-                        }
-
-                        _weekdayCache = newCache;
-                    }
-                }
+                _gameStringMap.Clear();
             }
+        }
 
-            // Busca instantânea O(1) ignorando maiúsculas/minúsculas
-            if (_weekdayCache.TryGetValue(englishWeekday.Trim(), out var localized))
+        internal static void ClearResultCaches()
+        {
+            lock (_cachesLock)
             {
-                return localized;
+                _resolvedItemNamesCache.Clear();
+                _resolvedLocationNamesCache.Clear();
+                _translatedDescriptionsCache.Clear();
             }
-
-            // Fallback para o mapa global caso por algum motivo a busca falhe
-            if (TryGetLocalizedGameString(englishWeekday, out var globalLocalized))
-                return globalLocalized;
-
-            return englishWeekday;
         }
 
         private static readonly List<IItemResolver> _itemResolvers = new();
@@ -251,6 +162,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _itemResolvers.Add(new LevelResolver());
                 _itemResolvers.Add(new ProgressiveResolver());
                 _itemResolvers.Add(new ItemKeyResolver());
+                _itemResolvers.Add(new ReadBookResolver());
                 _itemResolvers.Add(new PowerKeyResolver());
                 _itemResolvers.Add(new VanillaObjectResolver());
                 _itemResolvers.Add(new SeasonResolver());
@@ -284,8 +196,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
         }
 
-        // Cache for slow reflection field info
-        internal static System.Reflection.FieldInfo? _itemManagerField;
         private static bool _hasPreScouted = false;
         private static readonly object _preScoutLock = new object();
 
@@ -403,19 +313,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 {
                     if (_cachesLang != currentLang)
                     {
-                        _resolvedItemNamesCache.Clear();
-                        _resolvedLocationNamesCache.Clear();
-                        _translatedDescriptionsCache.Clear();
-                        _localizedBundleNamesCache.Clear();
-
-                        // Limpa os dicionários de cache quando o idioma muda
-                        _vanillaObjectsNameMap = null;
-                        _vanillaPowersNameMap = null;
-
-                        lock (_weekdayCacheLock)
-                        {
-                            _weekdayCache = null; // Força recarregamento dos dias da semana
-                        }
+                        TranslationCacheManager.ClearAll();
 
                         _cachesLang = currentLang;
                         ModEntry.Instance.Monitor.Log(
@@ -436,15 +334,15 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var saInstance = StardewArchipelago.ModEntry.Instance;
                 if (saInstance != null)
                 {
-                    _itemManagerField ??= typeof(StardewArchipelago.ModEntry).GetField(
+                    var itemManagerField = typeof(StardewArchipelago.ModEntry).GetField(
                         "_stardewItemManager",
                         System.Reflection.BindingFlags.NonPublic
                             | System.Reflection.BindingFlags.Instance
                     );
-                    if (_itemManagerField != null)
+                    if (itemManagerField != null)
                     {
                         var stardewItemManager =
-                            _itemManagerField.GetValue(saInstance)
+                            itemManagerField.GetValue(saInstance)
                             as StardewArchipelago.Stardew.StardewItemManager;
                         if (stardewItemManager != null)
                         {
@@ -574,21 +472,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 bytes += CalculateExactDictSize(_resolvedItemNamesCache, ref cachesCount);
                 bytes += CalculateExactDictSize(_resolvedLocationNamesCache, ref cachesCount);
                 bytes += CalculateExactDictSize(_translatedDescriptionsCache, ref cachesCount);
-                bytes += CalculateExactDictSize(_localizedBundleNamesCache, ref cachesCount);
-            }
-
-            lock (_weekdayCacheLock)
-            {
-                bytes += CalculateExactDictSize(_weekdayCache, ref cachesCount);
             }
 
             cacheEntries = cachesCount;
-
-            int indexesCount = 0;
-            bytes += CalculateExactDictSize(_vanillaBundlesMap, ref indexesCount);
-            bytes += CalculateExactDictSize(_vanillaObjectsNameMap, ref indexesCount);
-            bytes += CalculateExactDictSize(_vanillaPowersNameMap, ref indexesCount);
-            indexEntries = indexesCount;
+            indexEntries = 0;
 
             bytes += 85 * 1024;
             return bytes;

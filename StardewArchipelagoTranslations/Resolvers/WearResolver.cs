@@ -27,67 +27,87 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             return true;
         }
 
+        internal static void WarmUp() => EnsureHatsMap();
+
+        internal static void ClearCache()
+        {
+            lock (_hatsLock)
+            {
+                _vanillaHatsNameMap = null;
+            }
+        }
+
+        private static void EnsureHatsMap()
+        {
+            if (_vanillaHatsNameMap != null)
+            {
+                return;
+            }
+
+            lock (_hatsLock)
+            {
+                if (_vanillaHatsNameMap != null)
+                {
+                    return;
+                }
+
+                var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                using var engManager = new Microsoft.Xna.Framework.Content.ContentManager(
+                    Game1.game1.Content.ServiceProvider,
+                    Game1.game1.Content.RootDirectory
+                );
+                var savedLang = LocalizedContentManager.CurrentLanguageCode;
+                LocalizedContentManager.CurrentLanguageCode = LocalizedContentManager
+                    .LanguageCode
+                    .en;
+                Dictionary<string, string>? hats = null;
+                try
+                {
+                    hats = engManager.Load<Dictionary<string, string>>("Data\\Hats");
+                }
+                finally
+                {
+                    LocalizedContentManager.CurrentLanguageCode = savedLang;
+                }
+
+                if (hats != null)
+                {
+                    foreach (var pair in hats)
+                    {
+                        if (pair.Value == null)
+                        {
+                            continue;
+                        }
+
+                        var parts = pair.Value.Split('/');
+                        if (parts.Length <= 0)
+                        {
+                            continue;
+                        }
+
+                        var internalName = parts[0];
+                        var qualifiedId = $"(H){pair.Key}";
+
+                        map.TryAdd(internalName, qualifiedId);
+
+                        var cleanName = internalName
+                            .Replace(" ", "")
+                            .Replace("'", "")
+                            .Replace("_", "");
+                        map.TryAdd(cleanName, qualifiedId);
+                    }
+                }
+
+                _vanillaHatsNameMap = map;
+            }
+        }
+
         private string GetLocalizedHatName(string englishHatName)
         {
             try
             {
-                if (_vanillaHatsNameMap == null)
-                {
-                    lock (_hatsLock)
-                    {
-                        if (_vanillaHatsNameMap == null)
-                        {
-                            _vanillaHatsNameMap = new Dictionary<string, string>(
-                                StringComparer.OrdinalIgnoreCase
-                            );
-
-                            // Load Data\Hats in English so names are always canonical
-                            using var engManager =
-                                new Microsoft.Xna.Framework.Content.ContentManager(
-                                    Game1.game1.Content.ServiceProvider,
-                                    Game1.game1.Content.RootDirectory
-                                );
-                            var savedLang = LocalizedContentManager.CurrentLanguageCode;
-                            LocalizedContentManager.CurrentLanguageCode = LocalizedContentManager
-                                .LanguageCode
-                                .en;
-                            Dictionary<string, string>? hats = null;
-                            try
-                            {
-                                hats = engManager.Load<Dictionary<string, string>>("Data\\Hats");
-                            }
-                            finally
-                            {
-                                LocalizedContentManager.CurrentLanguageCode = savedLang;
-                            }
-
-                            if (hats != null)
-                            {
-                                foreach (var pair in hats)
-                                {
-                                    if (pair.Value != null)
-                                    {
-                                        var parts = pair.Value.Split('/');
-                                        if (parts.Length > 0)
-                                        {
-                                            var internalName = parts[0];
-                                            var qualifiedId = $"(H){pair.Key}";
-
-                                            _vanillaHatsNameMap.TryAdd(internalName, qualifiedId);
-
-                                            // Index by name without spaces/apostrophes
-                                            var cleanName = internalName
-                                                .Replace(" ", "")
-                                                .Replace("'", "")
-                                                .Replace("_", "");
-                                            _vanillaHatsNameMap.TryAdd(cleanName, qualifiedId);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                EnsureHatsMap();
 
                 var cleanLookupKey = englishHatName
                     .Replace(" ", "")
@@ -96,11 +116,15 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var underscoreLookupKey = englishHatName.Replace(" ", "_").Replace("'", "");
 
                 string? qualId = null;
-                _vanillaHatsNameMap.TryGetValue(englishHatName, out qualId);
+                _vanillaHatsNameMap!.TryGetValue(englishHatName, out qualId);
                 if (qualId == null)
+                {
                     _vanillaHatsNameMap.TryGetValue(underscoreLookupKey, out qualId);
+                }
                 if (qualId == null)
+                {
                     _vanillaHatsNameMap.TryGetValue(cleanLookupKey, out qualId);
+                }
 
                 if (qualId != null)
                 {
@@ -119,7 +143,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 );
             }
 
-            // Fallback to translating via item manager or original name
             return TranslationHelper.GetLocalizedItemName(englishHatName);
         }
     }

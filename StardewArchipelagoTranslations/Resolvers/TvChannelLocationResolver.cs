@@ -8,12 +8,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            if (
-                TranslationHelper._tvChannelGameStringKeys.TryGetValue(
-                    englishName,
-                    out var tvContentPath
-                )
-            )
+            if (TvChannelResolver.GameStringKeys.TryGetValue(englishName, out var tvContentPath))
             {
                 try
                 {

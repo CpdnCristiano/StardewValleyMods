@@ -277,7 +277,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                             .Translation.Get("location.beach_night_market")
                             .ToString();
 
-                    var localizedDay = TranslationHelper.GetLocalizedWeekday(day);
+                    var localizedDay = WeekdayResolver.GetLocalizedWeekday(day);
 
                     var localizedRec = ModEntry
                         .Translation.Get(

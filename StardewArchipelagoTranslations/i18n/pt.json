@@ -863,5 +863,6 @@
   "item.aurora_vineyard_reclamation": "Restauração do Vinhedo Aurora",
   "item.aurora_vineyard_tablet": "Placa do Vinhedo Aurora",
   "monster_eradication.format": "Erradicação de Monstros: {{monster}}",
-  "monster_eradication.format_with_count": "Erradicação de Monstros: {{count}} {{monster}}"
+  "monster_eradication.format_with_count": "Erradicação de Monstros: {{count}} {{monster}}",
+  "book.read": "Ler {{book}}"
 }

@@ -11,18 +11,20 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             if (englishName.StartsWith(dayPrefix, System.StringComparison.OrdinalIgnoreCase))
             {
                 var englishDay = englishName.Substring(dayPrefix.Length).Trim();
-                var localizedDay = TranslationHelper.GetLocalizedWeekday(englishDay);
+                var localizedDay = WeekdayResolver.GetLocalizedWeekday(englishDay);
                 localizedName = ModEntry
-                    .Translation.Get(
-                        "traveling_merchant_day_format",
-                        new { day = localizedDay }
-                    )
+                    .Translation.Get("traveling_merchant_day_format", new { day = localizedDay })
                     .ToString();
                 return true;
             }
 
             // "Traveling Merchant Stock Size"  →  item recebido
-            if (englishName.Equals("Traveling Merchant Stock Size", System.StringComparison.OrdinalIgnoreCase))
+            if (
+                englishName.Equals(
+                    "Traveling Merchant Stock Size",
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 localizedName = ModEntry
                     .Translation.Get("traveling_merchant_stock_size")
@@ -31,16 +33,24 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
 
             // "Traveling Merchant Discount"  →  item recebido
-            if (englishName.Equals("Traveling Merchant Discount", System.StringComparison.OrdinalIgnoreCase))
+            if (
+                englishName.Equals(
+                    "Traveling Merchant Discount",
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                localizedName = ModEntry
-                    .Translation.Get("traveling_merchant_discount")
-                    .ToString();
+                localizedName = ModEntry.Translation.Get("traveling_merchant_discount").ToString();
                 return true;
             }
 
             // "Traveling Merchant Metal Detector"  →  item recebido
-            if (englishName.Equals("Traveling Merchant Metal Detector", System.StringComparison.OrdinalIgnoreCase))
+            if (
+                englishName.Equals(
+                    "Traveling Merchant Metal Detector",
+                    System.StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 localizedName = ModEntry
                     .Translation.Get("traveling_merchant_metal_detector")

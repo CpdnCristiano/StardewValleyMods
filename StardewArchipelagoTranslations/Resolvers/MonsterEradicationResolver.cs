@@ -9,9 +9,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
     public class MonsterEradicationResolver : ILocationResolver
     {
         private const string Prefix = "Monster Eradication: ";
-        
+
         // Cache to avoid reloading game assets and repeating lookup logic
-        private static readonly Dictionary<string, string> _resolvedMonstersCache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, string> _resolvedMonstersCache = new(
+            StringComparer.OrdinalIgnoreCase
+        );
         private static Dictionary<string, string>? _rawMonstersData;
         private static readonly object _lock = new();
 
@@ -40,10 +42,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 if (translationHelper.ContainsKey("monster_eradication.format_with_count"))
                 {
-                    localizedName = translationHelper.Get(
-                        "monster_eradication.format_with_count",
-                        new { count = numberStr, monster = localizedMonster }
-                    ).ToString();
+                    localizedName = translationHelper
+                        .Get(
+                            "monster_eradication.format_with_count",
+                            new { count = numberStr, monster = localizedMonster }
+                        )
+                        .ToString();
                 }
                 else
                 {
@@ -54,10 +58,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 if (translationHelper.ContainsKey("monster_eradication.format"))
                 {
-                    localizedName = translationHelper.Get(
-                        "monster_eradication.format",
-                        new { monster = localizedMonster }
-                    ).ToString();
+                    localizedName = translationHelper
+                        .Get("monster_eradication.format", new { monster = localizedMonster })
+                        .ToString();
                 }
                 else
                 {
@@ -68,7 +71,30 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             return true;
         }
 
-        private static void ParseMonsterNameAndCount(string input, out string numberStr, out string monsterName)
+        internal static void WarmUp()
+        {
+            lock (_lock)
+            {
+                _rawMonstersData ??= Game1.content.Load<Dictionary<string, string>>(
+                    "Data\\Monsters"
+                );
+            }
+        }
+
+        internal static void ClearCache()
+        {
+            lock (_lock)
+            {
+                _rawMonstersData = null;
+                _resolvedMonstersCache.Clear();
+            }
+        }
+
+        private static void ParseMonsterNameAndCount(
+            string input,
+            out string numberStr,
+            out string monsterName
+        )
         {
             numberStr = string.Empty;
             monsterName = input;
@@ -122,8 +148,13 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             // B. Try to load display name from game's Data\Monsters asset (slash-separated string)
             try
             {
-                _rawMonstersData ??= Game1.content.Load<Dictionary<string, string>>("Data\\Monsters");
-                if (_rawMonstersData != null && _rawMonstersData.TryGetValue(lookupName, out var rawValue))
+                _rawMonstersData ??= Game1.content.Load<Dictionary<string, string>>(
+                    "Data\\Monsters"
+                );
+                if (
+                    _rawMonstersData != null
+                    && _rawMonstersData.TryGetValue(lookupName, out var rawValue)
+                )
                 {
                     if (!string.IsNullOrWhiteSpace(rawValue))
                     {

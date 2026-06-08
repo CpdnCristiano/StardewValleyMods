@@ -7,6 +7,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class PowerKeyResolver : IItemResolver
     {
+        private static Dictionary<string, string>? _vanillaPowersNameMap;
+        private static LocalizedContentManager.LanguageCode _cacheLang =
+            (LocalizedContentManager.LanguageCode)(-1);
+        private static readonly object _powersLock = new();
+
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
@@ -20,53 +25,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             try
             {
-                if (TranslationHelper._vanillaPowersNameMap == null)
-                {
-                    lock (TranslationHelper._powersLock)
-                    {
-                        if (TranslationHelper._vanillaPowersNameMap == null)
-                        {
-                            TranslationHelper._vanillaPowersNameMap = new Dictionary<
-                                string,
-                                string
-                            >(StringComparer.OrdinalIgnoreCase);
-                            var powers = Game1.content.Load<
-                                Dictionary<string, StardewValley.GameData.Powers.PowersData>
-                            >("Data\\Powers");
-                            if (powers != null)
-                            {
-                                foreach (var pair in powers)
-                                {
-                                    if (
-                                        pair.Value != null
-                                        && !string.IsNullOrWhiteSpace(pair.Value.DisplayName)
-                                    )
-                                    {
-                                        TranslationHelper._vanillaPowersNameMap[pair.Key] =
-                                            pair.Value.DisplayName;
-                                        var cleanPairKey = pair
-                                            .Key.Replace(" ", "")
-                                            .Replace("'", "")
-                                            .Replace("_", "");
-                                        TranslationHelper._vanillaPowersNameMap[cleanPairKey] =
-                                            pair.Value.DisplayName;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                EnsurePowersMap();
 
                 var cleanKey = englishName.Replace(" ", "").Replace("'", "").Replace("_", "");
                 if (
-                    TranslationHelper._vanillaPowersNameMap.TryGetValue(
-                        cleanKey,
-                        out var rawDisplayName
-                    )
-                    || TranslationHelper._vanillaPowersNameMap.TryGetValue(
-                        englishName,
-                        out rawDisplayName
-                    )
+                    _vanillaPowersNameMap!.TryGetValue(cleanKey, out var rawDisplayName)
+                    || _vanillaPowersNameMap.TryGetValue(englishName, out rawDisplayName)
                 )
                 {
                     var localized = TokenParser.ParseText(rawDisplayName);
@@ -79,6 +43,59 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
             catch { }
             return false;
+        }
+
+        internal static void WarmUp() => EnsurePowersMap();
+
+        private static void EnsurePowersMap()
+        {
+            var currentLang = LocalizedContentManager.CurrentLanguageCode;
+            if (_vanillaPowersNameMap != null && _cacheLang == currentLang)
+            {
+                return;
+            }
+
+            lock (_powersLock)
+            {
+                if (_vanillaPowersNameMap != null && _cacheLang == currentLang)
+                {
+                    return;
+                }
+
+                var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var powers = Game1.content.Load<
+                    Dictionary<string, StardewValley.GameData.Powers.PowersData>
+                >("Data\\Powers");
+                if (powers != null)
+                {
+                    foreach (var pair in powers)
+                    {
+                        if (pair.Value == null || string.IsNullOrWhiteSpace(pair.Value.DisplayName))
+                        {
+                            continue;
+                        }
+
+                        map[pair.Key] = pair.Value.DisplayName;
+                        var cleanPairKey = pair
+                            .Key.Replace(" ", "")
+                            .Replace("'", "")
+                            .Replace("_", "");
+                        map[cleanPairKey] = pair.Value.DisplayName;
+                    }
+                }
+
+                _vanillaPowersNameMap = map;
+                _cacheLang = currentLang;
+            }
+        }
+
+        internal static void ClearCache()
+        {
+            lock (_powersLock)
+            {
+                _vanillaPowersNameMap = null;
+                _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
+            }
         }
     }
 }

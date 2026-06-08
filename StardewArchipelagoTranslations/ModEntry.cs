@@ -47,8 +47,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             // Pre-populate translation caches when the save is loaded to ensure zero gameplay delay
             helper.Events.GameLoop.SaveLoaded += (sender, e) =>
             {
-                TranslationHelper.BuildGameStringMap();
-                TranslationHelper.PrepopulateCaches();
+                TranslationCacheManager.WarmAll();
                 TranslationHelper.ResetPreScout();
                 ScoutPatcher.ClearCache();
             };

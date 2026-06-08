@@ -6,6 +6,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class StardewItemManagerResolver : IItemResolver
     {
+        private static System.Reflection.FieldInfo? _itemManagerField;
+
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
@@ -14,16 +16,15 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var saInstance = StardewArchipelago.ModEntry.Instance;
                 if (saInstance != null)
                 {
-                    TranslationHelper._itemManagerField ??=
-                        typeof(StardewArchipelago.ModEntry).GetField(
-                            "_stardewItemManager",
-                            System.Reflection.BindingFlags.NonPublic
-                                | System.Reflection.BindingFlags.Instance
-                        );
-                    if (TranslationHelper._itemManagerField != null)
+                    _itemManagerField ??= typeof(StardewArchipelago.ModEntry).GetField(
+                        "_stardewItemManager",
+                        System.Reflection.BindingFlags.NonPublic
+                            | System.Reflection.BindingFlags.Instance
+                    );
+                    if (_itemManagerField != null)
                     {
                         var stardewItemManager =
-                            TranslationHelper._itemManagerField.GetValue(saInstance)
+                            _itemManagerField.GetValue(saInstance)
                             as StardewArchipelago.Stardew.StardewItemManager;
                         if (stardewItemManager != null)
                         {
@@ -73,7 +74,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                                 var isCooking =
                                     stardewRecipe
                                     is StardewArchipelago.Stardew.StardewCookingRecipe;
-                                if (TranslationHelper.RecipeExists(recipeCleanName, isCooking))
+                                if (VanillaRecipeResolver.RecipeExists(recipeCleanName, isCooking))
                                 {
                                     var nativeRecipe = new CraftingRecipe(
                                         recipeCleanName,
@@ -100,7 +101,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             catch (Exception ex)
             {
                 ModEntry.Instance.Monitor.Log(
-                    $"Error querying StardewItemManager for '{englishName}': {ex.Message}",
+                    $"[StardewItemManagerResolver] Error resolving '{englishName}': {ex.Message}",
                     LogLevel.Trace
                 );
             }

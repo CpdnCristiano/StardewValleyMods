@@ -19,7 +19,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 var englishDay = itemMatch.Groups[1].Value.Trim();
                 var itemLabel = itemMatch.Groups[2].Value.Trim();
-                var localizedDay = TranslationHelper.GetLocalizedWeekday(englishDay);
+                var localizedDay = WeekdayResolver.GetLocalizedWeekday(englishDay);
                 var template = ModEntry
                     .Translation.Get("traveling_merchant_item_format")
                     .ToString();
@@ -36,10 +36,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             if (englishName.StartsWith(dayPrefix, System.StringComparison.OrdinalIgnoreCase))
             {
                 var englishDay = englishName.Substring(dayPrefix.Length).Trim();
-                var localizedDay = TranslationHelper.GetLocalizedWeekday(englishDay);
-                var template = ModEntry
-                    .Translation.Get("traveling_merchant_day_format")
-                    .ToString();
+                var localizedDay = WeekdayResolver.GetLocalizedWeekday(englishDay);
+                var template = ModEntry.Translation.Get("traveling_merchant_day_format").ToString();
                 localizedName = template
                     .Replace("{{day}}", localizedDay)
                     .Replace("{day}", localizedDay);
