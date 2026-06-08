@@ -21,11 +21,14 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var npcName = match.Groups[1].Value.Trim();
                 var hearts = match.Groups[2].Value.Trim();
 
-                // Get localized NPC name
                 var localizedNpc = GetLocalizedNpcName(npcName);
 
-                // Translate to: "Amizade: <NPC> (<Hearts> ♡)"
-                localizedName = $"Amizade: {localizedNpc} ({hearts} ♡)";
+                localizedName = ModEntry
+                    .Translation.Get(
+                        "friendsanity.format",
+                        new { npc = localizedNpc, hearts }
+                    )
+                    .ToString();
                 return true;
             }
 
@@ -34,7 +37,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
         private string GetLocalizedNpcName(string npcName)
         {
-            // First try to get it from loaded game data
             try
             {
                 var character = Game1.getCharacterFromName(npcName);
@@ -45,15 +47,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
             catch { }
 
-            // Fallback: look up in i18n using npc.<sanitized_name> key
-            var sanitized = npcName.Replace(" ", "_").Replace(".", "").ToLowerInvariant();
-            var key = $"npc.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(key))
+            var key = $"npc.{ResolverText.ToKeySegment(npcName)}";
+            if (ResolverText.TryGetTranslation(key, out var localizedNpc))
             {
-                return ModEntry.Translation.Get(key).ToString();
+                return localizedNpc;
             }
 
-            // Last resort: return original name
             return npcName;
         }
     }

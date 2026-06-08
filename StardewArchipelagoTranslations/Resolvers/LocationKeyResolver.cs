@@ -1,5 +1,3 @@
-using System;
-
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class LocationKeyResolver : ILocationResolver
@@ -7,11 +5,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var sanitized = englishName.Replace(" ", "_").Replace("'", "").ToLower();
-            var key = $"location.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(key))
+            var key = $"location.{ResolverText.ToKeySegment(englishName)}";
+            if (ResolverText.TryGetTranslation(key, out var localized))
             {
-                localizedName = ModEntry.Translation.Get(key).ToString();
+                localizedName = localized;
                 return true;
             }
             return false;

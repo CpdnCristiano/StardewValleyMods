@@ -1,10 +1,12 @@
 #pragma warning disable CS8600, CS8601, CS8602, CS8603, CS8604, CS8605, CS8625
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
+using StardewValley.GameData.Buildings;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
@@ -76,12 +78,82 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                         );
                     }
                 }
+
+                var buildingsModifierType = AccessTools.TypeByName(
+                    "StardewArchipelago.Locations.CodeInjections.Vanilla.CarpenterBuildingsModifier"
+                );
+                if (buildingsModifierType != null)
+                {
+                    var addFreeBuildingsMethod = AccessTools.Method(
+                        buildingsModifierType,
+                        "AddFreeBuildings"
+                    );
+                    if (addFreeBuildingsMethod != null)
+                    {
+                        harmony.Patch(
+                            original: addFreeBuildingsMethod,
+                            postfix: new HarmonyMethod(
+                                typeof(CarpenterPatcher),
+                                nameof(AddFreeBuildings_Postfix)
+                            )
+                        );
+                        ModEntry.Instance.Monitor.Log(
+                            "Successfully patched CarpenterBuildingsModifier.AddFreeBuildings for localized free building names!",
+                            LogLevel.Info
+                        );
+                    }
+                }
             }
             catch (Exception ex)
             {
                 ModEntry.Instance.Monitor.Log(
                     $"Failed to patch CarpenterInjections: {ex}",
                     LogLevel.Error
+                );
+            }
+        }
+
+        public static void AddFreeBuildings_Postfix(IDictionary<string, BuildingData> buildingsData)
+        {
+            try
+            {
+                if (buildingsData == null)
+                    return;
+                foreach (var key in buildingsData.Keys)
+                {
+                    if (key.StartsWith("Free "))
+                    {
+                        var data = buildingsData[key];
+                        if (data != null)
+                        {
+                            if (
+                                data.Description != null
+                                && data.Description.StartsWith("A gift from a friend. ")
+                            )
+                            {
+                                data.Description = data.Description.Replace(
+                                    "A gift from a friend. ",
+                                    ModEntry.Translation.Get("buildings.free.description_prefix")
+                                );
+                            }
+                            if (data.Name != null)
+                            {
+                                data.Name = ModEntry
+                                    .Translation.Get(
+                                        "buildings.free.name",
+                                        new { name = data.Name }
+                                    )
+                                    .ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Instance.Monitor.Log(
+                    $"Error in CarpenterPatcher.AddFreeBuildings_Postfix: {ex.Message}",
+                    LogLevel.Trace
                 );
             }
         }

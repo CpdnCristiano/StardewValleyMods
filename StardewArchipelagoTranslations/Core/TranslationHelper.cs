@@ -37,6 +37,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             "Strings/StringsFromMaps",
             "Strings/Locations",
             "Strings/UI",
+            "Strings/1_6_Strings",
             "Strings/Events",
             "Strings/Notes",
             "Strings/Speech",
@@ -170,6 +171,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _itemResolvers.Add(new BuildingItemResolver());
                 _itemResolvers.Add(new StardewItemManagerResolver());
                 _itemResolvers.Add(new VanillaRecipeResolver());
+                _itemResolvers.Add(new StringsObjectNameResolver());
 
                 // Register location resolvers
                 _locationResolvers.Add(new QuestLocationResolver());
@@ -181,6 +183,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _locationResolvers.Add(new BlueprintResolver());
                 _locationResolvers.Add(new CommunityCenterAreaResolver());
                 _locationResolvers.Add(new BundleResolver());
+                _locationResolvers.Add(new RarecrowResolver());
+                _locationResolvers.Add(new SecretNoteLocationResolver());
+                _locationResolvers.Add(new SquidFestResolver());
                 _locationResolvers.Add(new LocationKeyResolver());
                 _locationResolvers.Add(new TvChannelLocationResolver());
                 _locationResolvers.Add(new WalnutsanityResolver());

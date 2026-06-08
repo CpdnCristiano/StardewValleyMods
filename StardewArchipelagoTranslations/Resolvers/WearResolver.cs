@@ -91,10 +91,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
                         map.TryAdd(internalName, qualifiedId);
 
-                        var cleanName = internalName
-                            .Replace(" ", "")
-                            .Replace("'", "")
-                            .Replace("_", "");
+                        var cleanName = ResolverText.ToCompactKeySegment(internalName);
                         map.TryAdd(cleanName, qualifiedId);
                     }
                 }
@@ -109,11 +106,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 EnsureHatsMap();
 
-                var cleanLookupKey = englishHatName
-                    .Replace(" ", "")
-                    .Replace("'", "")
-                    .Replace("_", "");
-                var underscoreLookupKey = englishHatName.Replace(" ", "_").Replace("'", "");
+                var cleanLookupKey = ResolverText.ToCompactKeySegment(englishHatName);
+                var underscoreLookupKey = ResolverText.ToKeySegment(englishHatName);
 
                 string? qualId = null;
                 _vanillaHatsNameMap!.TryGetValue(englishHatName, out qualId);

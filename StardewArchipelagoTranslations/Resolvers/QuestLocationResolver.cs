@@ -23,7 +23,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return false;
             }
 
-            var englishQuestTitle = englishName.Substring(questPrefix.Length).Trim();
+            var englishQuestTitle = NormalizeQuestTitle(
+                englishName.Substring(questPrefix.Length).Trim()
+            );
             if (string.IsNullOrWhiteSpace(englishQuestTitle))
             {
                 return false;
@@ -90,7 +92,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         continue;
                     }
 
-                    var engTitle = engParts[1].Trim();
+                    var engTitle = NormalizeQuestTitle(engParts[1].Trim());
 
                     if (!locQuests.TryGetValue(kvp.Key, out var locQuestData))
                     {
@@ -103,12 +105,28 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         continue;
                     }
 
-                    cache.TryAdd(engTitle, locParts[1].Trim());
+                    cache.TryAdd(engTitle, NormalizeQuestTitle(locParts[1].Trim()));
                 }
 
                 _englishQuestTitleToLocalizedTitleCache = cache;
                 _cacheLang = currentLang;
             }
+        }
+
+        private static string NormalizeQuestTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return title;
+            }
+
+            title = title.Trim();
+            if (title.Length >= 2 && title[0] == '"' && title[^1] == '"')
+            {
+                return title.Substring(1, title.Length - 2).Trim();
+            }
+
+            return title;
         }
 
         internal static void ClearCache()

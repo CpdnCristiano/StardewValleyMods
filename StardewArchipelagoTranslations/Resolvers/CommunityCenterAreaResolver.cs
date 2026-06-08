@@ -27,53 +27,37 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return englishAreaName;
             }
 
-            var clean = englishAreaName.Replace(" ", "");
+            var clean = ResolverText.ToPascalAssetSegment(englishAreaName);
 
-            try
+            if (
+                ResolverText.TryLoadGameString(
+                    $"Strings\\Locations:CommunityCenter_AreaName_{clean}",
+                    out var localized
+                )
+            )
             {
-                var key = $"Strings\\Locations:CommunityCenter_AreaName_{clean}";
-                var localized = Game1.content.LoadString(key);
-                if (!string.IsNullOrWhiteSpace(localized) && localized != key)
-                {
-                    return localized;
-                }
-            }
-            catch { }
-
-            try
-            {
-                var key = $"Strings\\UI:CommunityCenter_AreaName_{clean}";
-                var localized = Game1.content.LoadString(key);
-                if (!string.IsNullOrWhiteSpace(localized) && localized != key)
-                {
-                    return localized;
-                }
-            }
-            catch { }
-
-            try
-            {
-                var key = $"Strings\\Locations:{clean}";
-                var localized = Game1.content.LoadString(key);
-                if (!string.IsNullOrWhiteSpace(localized) && localized != key)
-                {
-                    return localized;
-                }
-            }
-            catch { }
-
-            var sanitized = englishAreaName.Replace(" ", "_").Replace("'", "").ToLower();
-            var itemKey = $"item.{sanitized}";
-
-            if (ModEntry.Translation.ContainsKey(itemKey))
-            {
-                return ModEntry.Translation.Get(itemKey).ToString();
+                return localized;
             }
 
-            var locKey = $"location.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(locKey))
+            if (ResolverText.TryLoadGameString($"Strings\\UI:CommunityCenter_AreaName_{clean}", out localized))
             {
-                return ModEntry.Translation.Get(locKey).ToString();
+                return localized;
+            }
+
+            if (ResolverText.TryLoadGameString($"Strings\\Locations:{clean}", out localized))
+            {
+                return localized;
+            }
+
+            var sanitized = ResolverText.ToKeySegment(englishAreaName);
+            if (ResolverText.TryGetTranslation($"item.{sanitized}", out localized))
+            {
+                return localized;
+            }
+
+            if (ResolverText.TryGetTranslation($"location.{sanitized}", out localized))
+            {
+                return localized;
             }
 
             return englishAreaName;

@@ -43,6 +43,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             // Load custom JSON mail templates
             MailPatcher.LoadTemplates(helper);
+            helper.Events.GameLoop.GameLaunched += (sender, e) =>
+            {
+                TravelingMerchantPatcher.Patch(harmony);
+            };
 
             // Pre-populate translation caches when the save is loaded to ensure zero gameplay delay
             helper.Events.GameLoop.SaveLoaded += (sender, e) =>

@@ -21,6 +21,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 VanillaObjectResolver.WarmUp,
                 VanillaObjectResolver.ClearCache
             ),
+            new CacheSource(
+                "StringsObjectNames",
+                StringsObjectNameResolver.WarmUp,
+                StringsObjectNameResolver.ClearCache
+            ),
             new CacheSource("Powers", PowerKeyResolver.WarmUp, PowerKeyResolver.ClearCache),
             new CacheSource("Bundles", BundleResolver.WarmUp, BundleResolver.ClearCache),
             new CacheSource("Weekdays", WeekdayResolver.WarmUp, WeekdayResolver.ClearCache),

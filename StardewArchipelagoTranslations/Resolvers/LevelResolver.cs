@@ -1,5 +1,3 @@
-using System;
-
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class LevelResolver : IItemResolver
@@ -7,11 +5,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var sanitized = englishName.Replace(" ", "_").Replace("'", "").ToLower();
-            var levelKey = $"level.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(levelKey))
+            var levelKey = $"level.{ResolverText.ToKeySegment(englishName)}";
+            if (ResolverText.TryGetTranslation(levelKey, out var localized))
             {
-                localizedName = ModEntry.Translation.Get(levelKey).ToString();
+                localizedName = localized;
                 return true;
             }
             return false;

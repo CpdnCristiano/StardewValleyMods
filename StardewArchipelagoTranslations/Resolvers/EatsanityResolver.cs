@@ -14,7 +14,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var itemName = englishName.Substring(eatPrefix.Length).Trim();
                 var localizedItem = TranslationHelper.GetLocalizedItemName(itemName);
                 localizedName = ModEntry
-                    .Translation.Get("location.eatsanity.eat_format", new { item = localizedItem })
+                    .Translation.Get("eatsanity.eat_format", new { item = localizedItem })
                     .ToString();
                 return true;
             }
@@ -26,7 +26,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var localizedItem = TranslationHelper.GetLocalizedItemName(itemName);
                 localizedName = ModEntry
                     .Translation.Get(
-                        "location.eatsanity.drink_format",
+                        "eatsanity.drink_format",
                         new { item = localizedItem }
                     )
                     .ToString();

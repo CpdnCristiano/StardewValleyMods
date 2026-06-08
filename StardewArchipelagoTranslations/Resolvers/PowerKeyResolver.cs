@@ -15,11 +15,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var sanitizedPowerName = englishName.Replace(" ", "_").Replace("'", "").ToLower();
-            var powerKey = $"power.{sanitizedPowerName}.name";
-            if (ModEntry.Translation.ContainsKey(powerKey))
+            var powerKey = $"power.{ResolverText.ToKeySegment(englishName)}.name";
+            if (ResolverText.TryGetTranslation(powerKey, out var localizedPowerName))
             {
-                localizedName = ModEntry.Translation.Get(powerKey).ToString();
+                localizedName = localizedPowerName;
                 return true;
             }
 
@@ -27,7 +26,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 EnsurePowersMap();
 
-                var cleanKey = englishName.Replace(" ", "").Replace("'", "").Replace("_", "");
+                var cleanKey = ResolverText.ToCompactKeySegment(englishName);
                 if (
                     _vanillaPowersNameMap!.TryGetValue(cleanKey, out var rawDisplayName)
                     || _vanillaPowersNameMap.TryGetValue(englishName, out rawDisplayName)
@@ -76,10 +75,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         }
 
                         map[pair.Key] = pair.Value.DisplayName;
-                        var cleanPairKey = pair
-                            .Key.Replace(" ", "")
-                            .Replace("'", "")
-                            .Replace("_", "");
+                        var cleanPairKey = ResolverText.ToCompactKeySegment(pair.Key);
                         map[cleanPairKey] = pair.Value.DisplayName;
                     }
                 }

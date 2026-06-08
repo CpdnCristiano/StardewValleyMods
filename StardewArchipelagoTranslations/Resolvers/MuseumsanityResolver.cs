@@ -20,28 +20,28 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             if (detail.Equals("Dwarf Scrolls", StringComparison.OrdinalIgnoreCase))
             {
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.dwarf_scrolls")
+                    .Translation.Get("museumsanity.dwarf_scrolls")
                     .ToString();
                 return true;
             }
             if (detail.Equals("Skeleton Front", StringComparison.OrdinalIgnoreCase))
             {
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.skeleton_front")
+                    .Translation.Get("museumsanity.skeleton_front")
                     .ToString();
                 return true;
             }
             if (detail.Equals("Skeleton Middle", StringComparison.OrdinalIgnoreCase))
             {
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.skeleton_middle")
+                    .Translation.Get("museumsanity.skeleton_middle")
                     .ToString();
                 return true;
             }
             if (detail.Equals("Skeleton Back", StringComparison.OrdinalIgnoreCase))
             {
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.skeleton_back")
+                    .Translation.Get("museumsanity.skeleton_back")
                     .ToString();
                 return true;
             }
@@ -56,7 +56,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 var count = donationsMatch.Groups[1].Value;
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.donations", new { count })
+                    .Translation.Get("museumsanity.donations", new { count })
                     .ToString();
                 return true;
             }
@@ -66,7 +66,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 var count = mineralsMatch.Groups[1].Value;
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.minerals", new { count })
+                    .Translation.Get("museumsanity.minerals", new { count })
                     .ToString();
                 return true;
             }
@@ -80,7 +80,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 var count = artifactsMatch.Groups[1].Value;
                 localizedName = ModEntry
-                    .Translation.Get("location.museumsanity.artifacts", new { count })
+                    .Translation.Get("museumsanity.artifacts", new { count })
                     .ToString();
                 return true;
             }
@@ -88,7 +88,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             // Otherwise, it is an individual item donation, resolve the item name
             localizedName = ModEntry
                 .Translation.Get(
-                    "location.museumsanity.item_format",
+                    "museumsanity.item_format",
                     new { item = TranslationHelper.GetLocalizedItemName(detail) }
                 )
                 .ToString();

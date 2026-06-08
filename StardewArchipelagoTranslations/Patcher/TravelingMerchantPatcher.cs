@@ -15,10 +15,17 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class TravelingMerchantPatcher
     {
+        private static bool _patched;
+
         public static void Patch(Harmony harmony)
         {
             try
             {
+                if (_patched)
+                {
+                    return;
+                }
+
                 var stardewAssembly = AppDomain
                     .CurrentDomain.GetAssemblies()
                     .FirstOrDefault(a => a.GetName().Name == "StardewArchipelago");
@@ -27,7 +34,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 {
                     ModEntry.Instance.Monitor.Log(
                         "[TravelingMerchantPatcher] StardewArchipelago assembly not found – skipping.",
-                        LogLevel.Warn
+                        LogLevel.Trace
                     );
                     return;
                 }
@@ -40,7 +47,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 {
                     ModEntry.Instance.Monitor.Log(
                         "[TravelingMerchantPatcher] TravelingMerchantInjections type not found – skipping.",
-                        LogLevel.Warn
+                        LogLevel.Trace
                     );
                     return;
                 }
@@ -57,6 +64,20 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                         postfix: new HarmonyMethod(
                             typeof(TravelingMerchantPatcher),
                             nameof(SetTravelingMerchantFlair_Postfix)
+                        )
+                    );
+                }
+                var setupFlairMethod = targetType.GetMethod(
+                    "SetUpShopOwner_TravelingMerchantApFlair_Postfix",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+                if (setupFlairMethod != null)
+                {
+                    harmony.Patch(
+                        setupFlairMethod,
+                        postfix: new HarmonyMethod(
+                            typeof(TravelingMerchantPatcher),
+                            nameof(SetUpShopOwnerTravelingMerchantFlair_Postfix)
                         )
                     );
                 }
@@ -97,6 +118,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     "[TravelingMerchantPatcher] Successfully patched TravelingMerchantInjections!",
                     LogLevel.Info
                 );
+                _patched = true;
             }
             catch (Exception ex)
             {
@@ -105,6 +127,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     LogLevel.Error
                 );
             }
+        }
+
+        public static void SetUpShopOwnerTravelingMerchantFlair_Postfix(ShopMenu __instance)
+        {
+            TranslateTravelingMerchantFlair(__instance);
         }
 
         private static bool CallIsTravelingMerchantDay(int dayOfMonth)
@@ -209,6 +236,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 
         public static void SetTravelingMerchantFlair_Postfix(ShopMenu travelingMerchantShopMenu)
         {
+            TranslateTravelingMerchantFlair(travelingMerchantShopMenu);
+        }
+
+        private static void TranslateTravelingMerchantFlair(ShopMenu travelingMerchantShopMenu)
+        {
             try
             {
                 if (
@@ -219,44 +251,42 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 
                 var text = travelingMerchantShopMenu.potraitPersonDialogue;
 
-                // 1. Lower stock
-                if (
-                    text.Contains(
-                        "I'm sorry I don't have much to offer. Maybe do something else in the meantime?"
-                    )
-                )
+                var translatedFixedFlair = false;
+
+                if (ContainsFlexibleText(text, "I'm sorry I don't have much to offer. Maybe do something else in the meantime?"))
                 {
-                    text = text.Replace(
+                    text = ReplaceFlexibleText(
+                        text,
                         "I'm sorry I don't have much to offer. Maybe do something else in the meantime?",
                         ModEntry.Translation.Get("traveling_merchant.flair.low_stock").ToString()
                     );
+                    translatedFixedFlair = true;
                 }
-                // 2. Default
-                else if (text.Contains("I got lots of good stuff for sale!"))
+                else if (ContainsFlexibleText(text, "I got lots of good stuff for sale!"))
                 {
-                    text = text.Replace(
+                    text = ReplaceFlexibleText(
+                        text,
                         "I got lots of good stuff for sale!",
                         ModEntry.Translation.Get("traveling_merchant.flair.default").ToString()
                     );
+                    translatedFixedFlair = true;
                 }
-                // 3. Feed family
-                else if (
-                    text.Contains("Sweety, will you please buy something? I have a family to feed")
-                )
+                else if (ContainsFlexibleText(text, "Sweety, will you please buy something? I have a family to feed"))
                 {
-                    text = text.Replace(
+                    text = ReplaceFlexibleText(
+                        text,
                         "Sweety, will you please buy something? I have a family to feed",
                         ModEntry.Translation.Get("traveling_merchant.flair.feed_family").ToString()
                     );
+                    translatedFixedFlair = true;
                 }
 
-                // 4. Recommendation: "{playerName} recommended that I visit {locationName} on {day}s."
-                // Regex pattern: "(.+?) recommended that I visit (.+?) on (.+?)s\."
                 var recMatch = Regex.Match(
                     text,
-                    @"(.+?) recommended that I visit (.+?) on (.+?)s\."
+                    @"(.+?)\s+recommended\s+that\s+I\s+visit\s+(.+?)\s+on\s+(.+?)s\.",
+                    RegexOptions.IgnoreCase
                 );
-                if (recMatch.Success)
+                if (!translatedFixedFlair && recMatch.Success)
                 {
                     var playerName = recMatch.Groups[1].Value;
                     var locationName = recMatch.Groups[2].Value;
@@ -294,12 +324,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     text = text.Replace(recMatch.Value, localizedRec);
                 }
 
-                // 5. Museum Hint: "I found something interesting, and I hear {playerName} wants someone to donate it to the Museum..."
                 var museumMatch = Regex.Match(
                     text,
-                    @"I found something interesting, and I hear (.+?) wants someone to donate it to the Museum\.\.\."
+                    @"I\s+found\s+something\s+interesting,\s+and\s+I\s+hear\s+(.+?)\s+wants\s+someone\s+to\s+donate\s+it\s+to\s+the\s+Museum\.\.\.",
+                    RegexOptions.IgnoreCase
                 );
-                if (museumMatch.Success)
+                if (!translatedFixedFlair && museumMatch.Success)
                 {
                     var playerName = museumMatch.Groups[1].Value;
                     var localizedMuseum = ModEntry
@@ -312,8 +342,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     text = text.Replace(museumMatch.Value, localizedMuseum);
                 }
 
-                // 6. Stock: "Stock: (\d+)%"
-                var stockMatch = Regex.Match(text, @"Stock:\s*(\d+)%");
+                var stockMatch = Regex.Match(text, @"Stock:\s*(\d+)%", RegexOptions.IgnoreCase);
                 if (stockMatch.Success)
                 {
                     var percent = stockMatch.Groups[1].Value;
@@ -339,6 +368,21 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     LogLevel.Error
                 );
             }
+        }
+
+        private static bool ContainsFlexibleText(string text, string phrase)
+        {
+            return Regex.IsMatch(text, ToFlexiblePattern(phrase), RegexOptions.IgnoreCase);
+        }
+
+        private static string ReplaceFlexibleText(string text, string phrase, string replacement)
+        {
+            return Regex.Replace(text, ToFlexiblePattern(phrase), replacement, RegexOptions.IgnoreCase);
+        }
+
+        private static string ToFlexiblePattern(string phrase)
+        {
+            return Regex.Replace(Regex.Escape(phrase), @"\\\s+", @"\s+");
         }
     }
 }

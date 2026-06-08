@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Archipelago.MultiClient.Net.MessageLog.Messages;
 using Archipelago.MultiClient.Net.MessageLog.Parts;
 using Archipelago.MultiClient.Net.Models;
@@ -113,6 +114,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 // Apply connector localization to non-player chat only.
                 if (message is not ChatLogMessage)
                 {
+                    stardewFullMessage = LocalizePlainCommandItems(stardewFullMessage);
                     stardewFullMessage = LocalizeProtocolConnectors(stardewFullMessage);
                 }
 
@@ -201,6 +203,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             // Use word boundaries so only standalone tokens are replaced (e.g. "to" won't affect "Tomato").
             text = System.Text.RegularExpressions.Regex.Replace(
                 text,
+                @"\bsending\b",
+                ModEntry.Translation.Get("chat.sending").ToString(),
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            );
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text,
                 @"\bsent\b",
                 ModEntry.Translation.Get("chat.sent").ToString(),
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase
@@ -225,6 +233,28 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             );
 
             return text;
+        }
+
+        private static string LocalizePlainCommandItems(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            return Regex.Replace(
+                text,
+                @"\bsending\s+""([^""]+)""",
+                match =>
+                {
+                    var localizedItem = TranslationHelper.GetLocalizedItemName(
+                        match.Groups[1].Value
+                    );
+                    var itemStartOffset = match.Groups[1].Index - match.Index;
+                    return $"{match.Value.Substring(0, itemStartOffset)}{localizedItem}\"";
+                },
+                RegexOptions.IgnoreCase
+            );
         }
     }
 }

@@ -15,29 +15,18 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
 
             var detail = englishName.Substring(prefix.Length).Trim();
-            var sanitizedDetail = detail
-                .Replace(" ", "_")
-                .Replace("'", "")
-                .Replace("#", "")
-                .ToLowerInvariant();
-            sanitizedDetail = System.Text.RegularExpressions.Regex.Replace(
-                sanitizedDetail,
-                @"_+",
-                "_"
-            );
+            var sanitizedDetail = ResolverText.ToKeySegment(detail);
             var detailKey = $"location.walnutsanity.{sanitizedDetail}";
 
-            if (ModEntry.Translation.ContainsKey(detailKey))
+            if (ResolverText.TryGetTranslation(detailKey, out var localizedDetail))
             {
-                var localizedDetail = ModEntry.Translation.Get(detailKey).ToString();
                 localizedName = localizedDetail;
                 return true;
             }
 
             var generalKey = $"location.{sanitizedDetail}";
-            if (ModEntry.Translation.ContainsKey(generalKey))
+            if (ResolverText.TryGetTranslation(generalKey, out localizedDetail))
             {
-                var localizedDetail = ModEntry.Translation.Get(generalKey).ToString();
                 localizedName = localizedDetail;
                 return true;
             }

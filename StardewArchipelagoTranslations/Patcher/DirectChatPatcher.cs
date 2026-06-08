@@ -9,7 +9,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     /// <summary>
     /// Intercepts direct Game1.chatBox.addMessage() calls from the core StardewArchipelago mod
-    /// and translates hardcoded English strings to Portuguese.
+    /// and translates hardcoded English strings through i18n rules.
     /// </summary>
     [HarmonyPatch(typeof(ChatBox), nameof(ChatBox.addMessage))]
     public static class DirectChatPatcher

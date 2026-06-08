@@ -1,5 +1,3 @@
-using System;
-
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class TrapResolver : IItemResolver
@@ -7,11 +5,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var sanitized = englishName.Replace(" ", "_").Replace("'", "").ToLower();
-            var trapKey = $"trap.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(trapKey))
+            var trapKey = $"trap.{ResolverText.ToKeySegment(englishName)}";
+            if (ResolverText.TryGetTranslation(trapKey, out var localized))
             {
-                localizedName = ModEntry.Translation.Get(trapKey).ToString();
+                localizedName = localized;
                 return true;
             }
             return false;

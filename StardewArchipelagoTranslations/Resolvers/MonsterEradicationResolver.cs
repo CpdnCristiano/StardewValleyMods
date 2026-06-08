@@ -136,13 +136,13 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
 
             // A. Check SMAPI translation JSON helper (for user overrides)
-            var sanitizedMonster = lookupName.Replace(" ", "_").Replace("'", "").ToLowerInvariant();
+            var sanitizedMonster = ResolverText.ToKeySegment(lookupName);
             var monsterKey = $"monster.{sanitizedMonster}";
             var translationHelper = ModEntry.Translation;
 
-            if (translationHelper.ContainsKey(monsterKey))
+            if (ResolverText.TryGetTranslation(monsterKey, out var localizedMonsterName))
             {
-                return translationHelper.Get(monsterKey).ToString();
+                return localizedMonsterName;
             }
 
             // B. Try to load display name from game's Data\Monsters asset (slash-separated string)
@@ -181,7 +181,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             // C. Try Stardew Valley native category strings (e.g. Strings\Locations:AdventureGuild_KillList_Slimes)
             try
             {
-                var cleanCategoryName = lookupName.Replace(" ", "");
+                var cleanCategoryName = ResolverText.ToPascalAssetSegment(lookupName);
                 var nativeKey = $"Strings\\Locations:AdventureGuild_KillList_{cleanCategoryName}";
                 var nativeString = Game1.content.LoadString(nativeKey);
                 if (!string.IsNullOrWhiteSpace(nativeString) && nativeString != nativeKey)

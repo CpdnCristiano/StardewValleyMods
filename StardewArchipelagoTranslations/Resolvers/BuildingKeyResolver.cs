@@ -1,5 +1,3 @@
-using System;
-
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class BuildingKeyResolver : IBuildingResolver
@@ -7,11 +5,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var sanitized = englishName.Replace(" ", "_").Replace("'", "").ToLowerInvariant();
-            var buildingKey = $"building.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(buildingKey))
+            var buildingKey = $"building.{ResolverText.ToKeySegment(englishName)}";
+            if (ResolverText.TryGetTranslation(buildingKey, out var localized))
             {
-                localizedName = ModEntry.Translation.Get(buildingKey).ToString();
+                localizedName = localized;
                 return true;
             }
             return false;

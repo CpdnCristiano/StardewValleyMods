@@ -177,7 +177,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     statueName = TranslationHelper.GetLocalizedItemName(STATUE_ITEM);
                 }
 
-                // Load and format the Portuguese (or active language) localized base game string
+                // Load and format the localized base game string.
                 var baseGameText = Game1.content.LoadString(
                     "Strings\\Locations:Club_ClubSeller",
                     statueName

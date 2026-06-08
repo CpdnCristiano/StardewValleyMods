@@ -7,7 +7,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         public bool TryResolve(string englishName, out string? localizedName)
         {
             localizedName = null;
-            var cleanBuildingName = englishName.Replace(" ", "").Replace("'", "");
+            var cleanBuildingName = ResolverText.ToPascalAssetSegment(englishName);
 
             // Try standard building strings first
             try

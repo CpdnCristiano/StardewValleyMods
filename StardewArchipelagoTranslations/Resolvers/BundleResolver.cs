@@ -33,11 +33,41 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     }
                 }
 
-                localizedName = ModEntry
-                    .Translation.Get("hints.bundle_format", new { name = bundleBaseName })
-                    .ToString();
-                return true;
+                if (TryFormatLocalizedBundleName(bundleBaseName, out localizedName))
+                {
+                    return true;
+                }
+
+                return false;
             }
+            return false;
+        }
+
+        private static bool TryFormatLocalizedBundleName(
+            string bundleBaseName,
+            out string? localizedName
+        )
+        {
+            localizedName = null;
+
+            try
+            {
+                var translation = ModEntry.Translation.Get(
+                    "hints.bundle_format",
+                    new { name = bundleBaseName }
+                );
+                if (translation.HasValue())
+                {
+                    var localized = translation.ToString();
+                    if (!string.IsNullOrWhiteSpace(localized))
+                    {
+                        localizedName = localized;
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
             return false;
         }
 
@@ -48,11 +78,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return englishBundleName;
             }
 
-            var sanitized = englishBundleName.Replace(" ", "").Replace("'", "").ToLower();
-            var key = $"bundle.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(key))
+            var key = $"bundle.{ResolverText.ToCompactKeySegment(englishBundleName)}";
+            if (ResolverText.TryGetTranslation(key, out var localized))
             {
-                return ModEntry.Translation.Get(key).ToString();
+                return localized;
             }
 
             var vanillaResolved = LookupVanillaBundleTranslation(englishBundleName);

@@ -18,11 +18,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 {
                     return ModEntry.Translation.Get("player.server").ToString();
                 }
-                return
-                    LocalizedContentManager.CurrentLanguageCode
-                    == LocalizedContentManager.LanguageCode.pt
-                    ? "Servidor"
-                    : "Server";
+                return "Server";
             }
 
             if (name.Equals("Ministry of Madness", StringComparison.OrdinalIgnoreCase))
@@ -35,11 +31,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 {
                     return ModEntry.Translation.Get("bundle.ministryofmadness").ToString();
                 }
-                return
-                    LocalizedContentManager.CurrentLanguageCode
-                    == LocalizedContentManager.LanguageCode.pt
-                    ? "Ministério da Loucura"
-                    : "Ministry of Madness";
+                return "Ministry of Madness";
             }
 
             return name;

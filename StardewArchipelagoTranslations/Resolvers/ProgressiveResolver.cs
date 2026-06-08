@@ -15,11 +15,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return false;
             }
 
-            var sanitized = englishName.Replace(" ", "_").Replace("'", "").ToLower();
+            var sanitized = ResolverText.ToKeySegment(englishName);
             var progressiveKey = $"progressive.{sanitized}";
-            if (ModEntry.Translation.ContainsKey(progressiveKey))
+            if (ResolverText.TryGetTranslation(progressiveKey, out var progressiveTranslation))
             {
-                localizedName = ModEntry.Translation.Get(progressiveKey).ToString();
+                localizedName = progressiveTranslation;
                 return true;
             }
 
@@ -39,7 +39,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
 
             var coreName = string.Join(" ", coreTokens);
-            var coreSanitized = coreName.Replace(" ", "_").Replace("'", "").ToLowerInvariant();
+            var coreSanitized = ResolverText.ToKeySegment(coreName);
             var progressiveCandidates = new[]
             {
                 $"progressive.progressive_{coreSanitized}",
@@ -49,9 +49,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             foreach (var key in progressiveCandidates)
             {
-                if (ModEntry.Translation.ContainsKey(key))
+                if (ResolverText.TryGetTranslation(key, out progressiveTranslation))
                 {
-                    localizedName = ModEntry.Translation.Get(key).ToString();
+                    localizedName = progressiveTranslation;
                     return true;
                 }
             }

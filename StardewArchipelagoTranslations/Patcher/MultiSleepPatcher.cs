@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
-using StardewValley.GameData.Buildings;
 using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
@@ -88,77 +86,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     );
                 }
 
-                // 4. Patch CarpenterBuildingsModifier.AddFreeBuildings
-                var addFreeBuildingsMethod = AccessTools.Method(
-                    typeof(StardewArchipelago.Locations.CodeInjections.Vanilla.CarpenterBuildingsModifier),
-                    "AddFreeBuildings"
-                );
-                if (addFreeBuildingsMethod != null)
-                {
-                    harmony.Patch(
-                        original: addFreeBuildingsMethod,
-                        postfix: new HarmonyMethod(
-                            typeof(MultiSleepPatcher),
-                            nameof(AddFreeBuildings_Postfix)
-                        )
-                    );
-                    ModEntry.Instance.Monitor.Log(
-                        "MultiSleepPatcher: Patched AddFreeBuildings",
-                        LogLevel.Info
-                    );
-                }
             }
             catch (Exception ex)
             {
                 ModEntry.Instance.Monitor.Log(
                     $"Error while applying MultiSleepPatcher patches: {ex.Message}",
                     LogLevel.Error
-                );
-            }
-        }
-
-        // Postfix to translate free buildings description prefix to Portuguese
-        public static void AddFreeBuildings_Postfix(IDictionary<string, BuildingData> buildingsData)
-        {
-            try
-            {
-                if (buildingsData == null)
-                    return;
-                foreach (var key in buildingsData.Keys)
-                {
-                    if (key.StartsWith("Free "))
-                    {
-                        var data = buildingsData[key];
-                        if (data != null)
-                        {
-                            if (
-                                data.Description != null
-                                && data.Description.StartsWith("A gift from a friend. ")
-                            )
-                            {
-                                data.Description = data.Description.Replace(
-                                    "A gift from a friend. ",
-                                    ModEntry.Translation.Get("buildings.free.description_prefix")
-                                );
-                            }
-                            if (data.Name != null)
-                            {
-                                data.Name = ModEntry
-                                    .Translation.Get(
-                                        "buildings.free.name",
-                                        new { name = data.Name }
-                                    )
-                                    .ToString();
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ModEntry.Instance.Monitor.Log(
-                    $"Error in MultiSleepPatcher.AddFreeBuildings_Postfix: {ex.Message}",
-                    LogLevel.Trace
                 );
             }
         }

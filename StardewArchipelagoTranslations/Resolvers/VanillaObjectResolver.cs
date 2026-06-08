@@ -18,8 +18,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             {
                 EnsureObjectMap();
 
-                var cleanLookupKey = englishName.Replace(" ", "").Replace("'", "").Replace("_", "");
-                var underscoreLookupKey = englishName.Replace(" ", "_").Replace("'", "");
+                var cleanLookupKey = ResolverText.ToCompactKeySegment(englishName);
+                var underscoreLookupKey = ResolverText.ToKeySegment(englishName);
 
                 string? qualId = null;
                 _vanillaObjectsNameMap!.TryGetValue(englishName, out qualId);
@@ -98,13 +98,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         map.TryAdd(pair.Value.Name, qualifiedId);
                         map.TryAdd(pair.Key, qualifiedId);
 
-                        var cleanName = pair
-                            .Value.Name.Replace(" ", "")
-                            .Replace("'", "")
-                            .Replace("_", "");
+                        var cleanName = ResolverText.ToCompactKeySegment(pair.Value.Name);
                         map.TryAdd(cleanName, qualifiedId);
 
-                        var cleanKey = pair.Key.Replace(" ", "").Replace("'", "").Replace("_", "");
+                        var cleanKey = ResolverText.ToCompactKeySegment(pair.Key);
                         map.TryAdd(cleanKey, qualifiedId);
                     }
 
@@ -134,13 +131,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                             }
 
                             var qualifiedId = $"(O){objectId}";
-                            var cleanFieldName = field
-                                .Name.Replace("_", "")
-                                .Replace("'", "")
-                                .ToLower();
+                            var cleanFieldName = ResolverText.ToCompactKeySegment(field.Name);
                             map.TryAdd(cleanFieldName, qualifiedId);
 
-                            var fieldNameWithUnderscores = field.Name.Replace("'", "").ToLower();
+                            var fieldNameWithUnderscores = ResolverText.ToKeySegment(field.Name);
                             map.TryAdd(fieldNameWithUnderscores, qualifiedId);
                         }
                     }
