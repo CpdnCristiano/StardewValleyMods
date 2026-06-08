@@ -39,6 +39,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             TravelingMerchantPatcher.Patch(harmony);
             WizardBookPatcher.Patch(harmony);
             BillboardPatcher.Patch(harmony);
+            KaitoStardropDialoguePatcher.Patch(harmony);
             // CasinoPatcher.Patch(harmony);
 
             // Load custom JSON mail templates

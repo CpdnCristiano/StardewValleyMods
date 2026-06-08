@@ -15,7 +15,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 QuestLocationResolver.WarmUp,
                 QuestLocationResolver.ClearCache
             ),
-            new CacheSource("Books", ReadBookResolver.WarmUp, ReadBookResolver.ClearCache),
+            new CacheSource("PowerBooks", ReadBookResolver.WarmUp, ReadBookResolver.ClearCache),
             new CacheSource(
                 "VanillaObjects",
                 VanillaObjectResolver.WarmUp,

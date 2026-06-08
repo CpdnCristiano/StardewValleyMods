@@ -22,6 +22,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return true;
             }
 
+            if (PowerBookNameResolver.TryResolve(englishName, out localizedName))
+            {
+                return true;
+            }
+
             try
             {
                 EnsurePowersMap();
@@ -44,7 +49,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             return false;
         }
 
-        internal static void WarmUp() => EnsurePowersMap();
+        internal static void WarmUp()
+        {
+            PowerBookNameResolver.WarmUp();
+            EnsurePowersMap();
+        }
 
         private static void EnsurePowersMap()
         {
@@ -92,6 +101,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _vanillaPowersNameMap = null;
                 _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
+
+            PowerBookNameResolver.ClearCache();
         }
     }
 }
