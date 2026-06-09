@@ -97,10 +97,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     if (
                         englishStrings.TryGetValue(key, out var english)
                         && english.Equals(englishText, StringComparison.OrdinalIgnoreCase)
-                        && localizedStrings.TryGetValue(key, out localized)
-                        && !string.IsNullOrWhiteSpace(localized)
+                        && localizedStrings.TryGetValue(key, out var localizedValue)
+                        && !string.IsNullOrWhiteSpace(localizedValue)
                     )
                     {
+                        localized = localizedValue;
                         return true;
                     }
                 }
