@@ -40,10 +40,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             WizardBookPatcher.Patch(harmony);
             BillboardPatcher.Patch(harmony);
             KaitoStardropDialoguePatcher.Patch(harmony);
+            StardropJokesPatcher.Patch(harmony);
             // CasinoPatcher.Patch(harmony);
 
             // Load custom JSON mail templates
             MailPatcher.LoadTemplates(helper);
+            StardropJokeTemplates.Load(helper);
             helper.Events.GameLoop.GameLaunched += (sender, e) =>
             {
                 TravelingMerchantPatcher.Patch(harmony);

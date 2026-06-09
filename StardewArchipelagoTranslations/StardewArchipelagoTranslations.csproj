@@ -26,6 +26,9 @@
     <None Update="templates\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="template\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="..\Common.Patching\Common.Patching.projitems" Label="Shared" />
 </Project>
