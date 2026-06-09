@@ -1,7 +1,11 @@
 {
   "robin": [
-    "Sua mente está cheia de pensamentos sobre Robin... e de um plano péssimo para tentar conquistar uma mulher casada.",
-    "{player} pensa em {favorite}... e lembra que talvez tentar pegar mulher casada não seja uma escolha muito sábia.",
-    "Você sente o gosto do Stardrop e imediatamente imagina Robin dizendo: 'sou casada', enquanto você finge que não ouviu."
+    "Você sente o gosto do Stardrop e imediatamente imagina Robin dizendo: 'Sou casada.' Você decide ignorar esse detalhe.",
+    "Por um breve momento, você acredita ter alguma chance com Robin. O momento passa.",
+    "O sabor do Stardrop é mágico. Sua obsessão por Robin continua sendo um problema bem mundano.",
+    "Você sente o gosto do Stardrop e imagina Robin dizendo: 'Ainda sou casada, sabia?' Como se precisasse lembrar."
+  ],
+  "abigail": [
+    "Você pensa em Abigail. Por segurança, decide esconder suas pedras preciosas."
   ]
 }
