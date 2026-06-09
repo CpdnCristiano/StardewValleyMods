@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HarmonyLib;
 using StardewModdingAPI;
 using StardewValley;
@@ -10,29 +9,13 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
     {
         public static void Patch(Harmony harmony)
         {
-            PatchMethod(
-                harmony,
-                "StardewArchipelago.Locations.CodeInjections.Vanilla.EatInjections",
-                "DoneEatingStardrop"
-            );
-            PatchMethod(
-                harmony,
-                "StardewArchipelago.GameModifications.CodeInjections.FarmerInjections",
-                "DoneEatingFavoriteThingKaito"
-            );
-        }
-
-        private static void PatchMethod(Harmony harmony, string typeName, string methodName)
-        {
             try
             {
-                var targetType = AccessTools.TypeByName(typeName);
-                if (targetType == null)
-                {
-                    return;
-                }
-
-                var method = AccessTools.Method(targetType, methodName);
+                var method = AccessTools.Method(
+                    typeof(DelayedAction),
+                    nameof(DelayedAction.showDialogueAfterDelay),
+                    new[] { typeof(string), typeof(int) }
+                );
                 if (method == null)
                 {
                     return;
@@ -40,68 +23,66 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 
                 harmony.Patch(
                     original: method,
-                    transpiler: new HarmonyMethod(
+                    prefix: new HarmonyMethod(
                         typeof(StardropJokesPatcher),
-                        nameof(ShowDialogueAfterDelay_Transpiler)
+                        nameof(ShowDialogueAfterDelay_Prefix)
                     )
                 );
 
                 ModEntry.Instance.Monitor.Log(
-                    $"Successfully patched {typeName}.{methodName} for custom Stardrop jokes!",
+                    "Successfully patched DelayedAction.showDialogueAfterDelay for custom Stardrop jokes!",
                     LogLevel.Info
                 );
             }
             catch (Exception ex)
             {
                 ModEntry.Instance.Monitor.Log(
-                    $"Failed to patch {typeName}.{methodName} for custom Stardrop jokes: {ex}",
+                    $"Failed to patch custom Stardrop jokes: {ex}",
                     LogLevel.Error
                 );
             }
         }
 
-        public static IEnumerable<CodeInstruction> ShowDialogueAfterDelay_Transpiler(
-            IEnumerable<CodeInstruction> instructions
-        )
+        public static void ShowDialogueAfterDelay_Prefix(ref string __0)
         {
-            var originalMethod = AccessTools.Method(
-                typeof(DelayedAction),
-                nameof(DelayedAction.showDialogueAfterDelay),
-                new[] { typeof(string), typeof(int) }
-            );
-            var replacementMethod = AccessTools.Method(
-                typeof(StardropJokesPatcher),
-                nameof(ShowJokeOrOriginalDialogueAfterDelay)
-            );
-
-            foreach (var instruction in instructions)
+            try
             {
                 if (
-                    originalMethod != null
-                    && replacementMethod != null
-                    && instruction.Calls(originalMethod)
+                    IsStardropDialogue(__0)
+                    && StardropJokeTemplates.TryGetJoke(
+                        Game1.player?.favoriteThing.Value,
+                        out var joke
+                    )
                 )
                 {
-                    yield return new CodeInstruction(instruction)
-                    {
-                        operand = replacementMethod,
-                    };
-                    continue;
+                    __0 = joke;
                 }
-
-                yield return instruction;
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Instance.Monitor.Log(
+                    $"Error applying custom Stardrop joke: {ex.Message}",
+                    LogLevel.Trace
+                );
             }
         }
 
-        public static void ShowJokeOrOriginalDialogueAfterDelay(string text, int delay)
+        private static bool IsStardropDialogue(string text)
         {
-            if (StardropJokeTemplates.TryGetJoke(Game1.player?.favoriteThing.Value, out var joke))
+            if (string.IsNullOrWhiteSpace(text))
             {
-                DelayedAction.showDialogueAfterDelay(joke, delay);
-                return;
+                return false;
             }
 
-            DelayedAction.showDialogueAfterDelay(text, delay);
+            var prefix = Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3100");
+            var suffix = Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3101");
+            var kaitoSuffix = suffix.Length > 3 ? suffix[3..] : suffix;
+
+            return text.StartsWith(prefix, StringComparison.Ordinal)
+                && (
+                    text.Contains(suffix, StringComparison.Ordinal)
+                    || text.Contains(kaitoSuffix, StringComparison.Ordinal)
+                );
         }
     }
 }
