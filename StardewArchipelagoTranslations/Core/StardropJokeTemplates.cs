@@ -8,7 +8,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     internal static class StardropJokeTemplates
     {
-        private const string FileName = "stardropjokes.json";
         private static readonly Random Random = new();
         private static Dictionary<string, List<string>> _templates =
             new(StringComparer.OrdinalIgnoreCase);
@@ -23,7 +22,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return;
             }
 
-            var relativePath = $"templates/stardropjokes/{locale}/{FileName}";
+            var relativePath = $"templates/stardropjokes/{locale}.json";
             var fullPath = Path.Combine(helper.DirectoryPath, relativePath);
             if (!File.Exists(fullPath))
             {
