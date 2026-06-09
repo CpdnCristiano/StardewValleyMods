@@ -23,7 +23,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return;
             }
 
-            var relativePath = $"template/{locale}/{FileName}";
+            var relativePath = $"templates/stardropjokes/{locale}/{FileName}";
             var fullPath = Path.Combine(helper.DirectoryPath, relativePath);
             if (!File.Exists(fullPath))
             {
