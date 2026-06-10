@@ -162,6 +162,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _itemResolvers.Add(new TrapResolver());
                 _itemResolvers.Add(new LevelResolver());
                 _itemResolvers.Add(new ProgressiveResolver());
+                _itemResolvers.Add(new FriendshipBonusResolver());
+                _itemResolvers.Add(new BooksellerResolver());
                 _itemResolvers.Add(new ItemKeyResolver());
                 _itemResolvers.Add(new ReadBookResolver());
                 _itemResolvers.Add(new PowerKeyResolver());
@@ -181,6 +183,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 _locationResolvers.Add(new PurchaseResolver());
                 _locationResolvers.Add(new HarvestResolver());
                 _locationResolvers.Add(new BlueprintResolver());
+                _locationResolvers.Add(new CookLocationResolver());
+                _locationResolvers.Add(new CraftLocationResolver());
                 _locationResolvers.Add(new CommunityCenterAreaResolver());
                 _locationResolvers.Add(new BundleResolver());
                 _locationResolvers.Add(new RarecrowResolver());

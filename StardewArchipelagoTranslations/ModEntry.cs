@@ -39,13 +39,13 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             TravelingMerchantPatcher.Patch(harmony);
             WizardBookPatcher.Patch(harmony);
             BillboardPatcher.Patch(harmony);
+            ChatForwarderPatcher.Patch(harmony);
+            BankHandlerPatcher.Patch(harmony);
+            HintHelperPatcher.Patch(harmony);
             KaitoStardropDialoguePatcher.Patch(harmony);
             StardropJokesPatcher.Patch(harmony);
             // CasinoPatcher.Patch(harmony);
 
-            // Load custom JSON mail templates
-            MailPatcher.LoadTemplates(helper);
-            StardropJokeTemplates.Load(helper);
             helper.Events.GameLoop.GameLaunched += (sender, e) =>
             {
                 TravelingMerchantPatcher.Patch(harmony);
@@ -57,6 +57,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 TranslationCacheManager.WarmAll();
                 TranslationHelper.ResetPreScout();
                 ScoutPatcher.ClearCache();
+                MailPatcher.LoadTemplates(helper);
+                StardropJokeTemplates.Load(helper);
             };
 
             helper.Events.GameLoop.ReturnedToTitle += (sender, e) =>

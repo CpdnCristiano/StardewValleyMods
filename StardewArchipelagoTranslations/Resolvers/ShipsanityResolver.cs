@@ -14,7 +14,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             }
 
             var itemName = englishName.Substring(prefix.Length).Trim();
-            localizedName = TranslationHelper.GetLocalizedItemName(itemName);
+            var localizedItem = TranslationHelper.GetLocalizedItemName(itemName);
+            localizedName = ModEntry
+                .Translation.Get("shipsanity.format", new { item = localizedItem })
+                .ToString();
             return true;
         }
     }

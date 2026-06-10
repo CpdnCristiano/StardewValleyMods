@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Emit;
 using HarmonyLib;
+using StardewArchipelago.Constants.Vanilla;
 using StardewModdingAPI;
 using StardewValley;
 using StardewObject = StardewValley.Object;
@@ -8,46 +12,30 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
 {
     public static class StardropJokesPatcher
     {
-        private const string StardropQualifiedItemId = "(O)434";
-        private static string? _pendingJoke;
+        private const int StardropDialogueDelay = 6000;
 
         public static void Patch(Harmony harmony)
         {
             try
             {
-                var doneEatingMethod = AccessTools.Method(typeof(Farmer), nameof(Farmer.doneEating));
-                if (doneEatingMethod != null)
-                {
-                    harmony.Patch(
-                        original: doneEatingMethod,
-                        prefix: new HarmonyMethod(
-                            typeof(StardropJokesPatcher),
-                            nameof(DoneEating_Prefix)
-                        )
-                    );
-                }
-
-                var method = AccessTools.Method(
-                    typeof(DelayedAction),
-                    nameof(DelayedAction.showDialogueAfterDelay),
-                    new[] { typeof(string), typeof(int) }
+                var eatInjectionsType = AccessTools.TypeByName(
+                    "StardewArchipelago.Locations.CodeInjections.Vanilla.EatInjections"
                 );
-                if (method == null)
+                var doneEatingPatchesPrefixMethod = eatInjectionsType != null
+                    ? AccessTools.Method(eatInjectionsType, "DoneEating_EatingPatches_Prefix")
+                    : null;
+
+                if (doneEatingPatchesPrefixMethod == null)
                 {
                     return;
                 }
 
                 harmony.Patch(
-                    original: method,
-                    prefix: new HarmonyMethod(
+                    original: doneEatingPatchesPrefixMethod,
+                    transpiler: new HarmonyMethod(
                         typeof(StardropJokesPatcher),
-                        nameof(ShowDialogueAfterDelay_Prefix)
+                        nameof(DoneEatingPatchesPrefix_Transpiler)
                     )
-                );
-
-                ModEntry.Instance.Monitor.Log(
-                    "Successfully patched DelayedAction.showDialogueAfterDelay for custom Stardrop jokes!",
-                    LogLevel.Info
                 );
             }
             catch (Exception ex)
@@ -59,72 +47,74 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             }
         }
 
-        public static void ShowDialogueAfterDelay_Prefix(ref string __0)
+        public static IEnumerable<CodeInstruction> DoneEatingPatchesPrefix_Transpiler(
+            IEnumerable<CodeInstruction> instructions
+        )
         {
-            try
+            var farmerInjectionsType = AccessTools.TypeByName(
+                "StardewArchipelago.GameModifications.CodeInjections.FarmerInjections"
+            );
+            var originalMethod = farmerInjectionsType != null
+                ? AccessTools.Method(farmerInjectionsType, "DoneEatingFavoriteThingKaito")
+                : null;
+            var replacementMethod = AccessTools.Method(
+                typeof(StardropJokesPatcher),
+                nameof(DoneEatingFavoriteThingCustomJoke)
+            );
+
+            foreach (var instruction in instructions)
             {
-                if (_pendingJoke != null && IsStardropDialogue(__0))
+                if (
+                    originalMethod != null
+                    && replacementMethod != null
+                    && instruction.Calls(originalMethod)
+                )
                 {
-                    __0 = _pendingJoke;
-                    _pendingJoke = null;
+                    yield return instruction;
+                    yield return new CodeInstruction(OpCodes.Ldarg_0);
+                    yield return new CodeInstruction(OpCodes.Call, replacementMethod);
+                    continue;
                 }
-            }
-            catch (Exception ex)
-            {
-                ModEntry.Instance.Monitor.Log(
-                    $"Error applying custom Stardrop joke: {ex.Message}",
-                    LogLevel.Trace
-                );
+
+                yield return instruction;
             }
         }
 
-        public static void DoneEating_Prefix(Farmer __instance)
+        public static void DoneEatingFavoriteThingCustomJoke(Farmer __instance)
         {
             try
             {
-                _pendingJoke = null;
-
-                if (__instance.itemToEat is not StardewObject itemToEat)
+                var itemToEat = __instance.itemToEat as StardewObject;
+                if (itemToEat?.QualifiedItemId != QualifiedItemIds.STARDROP)
                 {
                     return;
                 }
 
-                if (itemToEat.QualifiedItemId != StardropQualifiedItemId)
+                if (!StardropJokeTemplates.TryGetJoke(__instance.favoriteThing.Value, out var joke))
                 {
                     return;
                 }
 
-                if (StardropJokeTemplates.TryGetJoke(__instance.favoriteThing.Value, out var joke))
+                if (Game1.delayedActions.Any())
                 {
-                    _pendingJoke = joke;
+                    Game1.delayedActions.Clear();
                 }
+
+                DelayedAction.showDialogueAfterDelay(
+                    Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3100")
+                        + joke
+                        + Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3101").Substring(3),
+                    StardropDialogueDelay
+                );
+                DelayedAction.stopFarmerGlowing(StardropDialogueDelay);
             }
             catch (Exception ex)
             {
-                _pendingJoke = null;
                 ModEntry.Instance.Monitor.Log(
-                    $"Error preparing custom Stardrop joke: {ex.Message}",
-                    LogLevel.Trace
+                    $"Failed in {nameof(DoneEatingFavoriteThingCustomJoke)}:{Environment.NewLine}{ex}",
+                    LogLevel.Error
                 );
             }
-        }
-
-        private static bool IsStardropDialogue(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return false;
-            }
-
-            var prefix = Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3100");
-            var suffix = Game1.content.LoadString("Strings\\StringsFromCSFiles:Game1.cs.3101");
-            var kaitoSuffix = suffix.Length > 3 ? suffix[3..] : suffix;
-
-            return text.StartsWith(prefix, StringComparison.Ordinal)
-                && (
-                    text.Contains(suffix, StringComparison.Ordinal)
-                    || text.Contains(kaitoSuffix, StringComparison.Ordinal)
-                );
         }
     }
 }

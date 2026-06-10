@@ -11,6 +11,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             if (englishName.StartsWith("Complete ", StringComparison.OrdinalIgnoreCase))
             {
                 var cleanAreaName = englishName.Substring(9).Trim();
+                if (!IsCommunityCenterArea(cleanAreaName))
+                {
+                    return false;
+                }
+
                 var localizedArea = ResolveLocalizedAreaName(cleanAreaName);
                 localizedName = ModEntry
                     .Translation.Get("hints.complete_area_format", new { name = localizedArea })
@@ -18,6 +23,17 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return true;
             }
             return false;
+        }
+
+        private static bool IsCommunityCenterArea(string englishAreaName)
+        {
+            return englishAreaName.Equals("Pantry", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Crafts Room", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Fish Tank", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Boiler Room", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Vault", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Bulletin Board", StringComparison.OrdinalIgnoreCase)
+                || englishAreaName.Equals("Community Center", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ResolveLocalizedAreaName(string englishAreaName)

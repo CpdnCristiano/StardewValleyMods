@@ -22,9 +22,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 return;
             }
 
-            var relativePath = $"templates/stardropjokes/{locale}.json";
-            var fullPath = Path.Combine(helper.DirectoryPath, relativePath);
-            if (!File.Exists(fullPath))
+            var relativePath = GetTemplateRelativePath(helper, locale);
+            if (string.IsNullOrWhiteSpace(relativePath))
             {
                 return;
             }
@@ -59,14 +58,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                ModEntry.Instance.Monitor.Log(
-                    $"Invalid Stardrop jokes template '{relativePath}': {ex.Message}",
-                    LogLevel.Trace
-                );
+                return;
             }
         }
+
 
         internal static bool TryGetJoke(string? favoriteThing, out string joke)
         {
@@ -119,6 +116,33 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             key = string.Empty;
             templates = null!;
             return false;
+        }
+
+        private static string? GetTemplateRelativePath(IModHelper helper, string locale)
+        {
+            foreach (var candidate in GetLocaleCandidates(locale))
+            {
+                var relativePath = $"templates/stardropjokes/{candidate}.json";
+                var fullPath = Path.Combine(helper.DirectoryPath, relativePath);
+
+                if (File.Exists(fullPath))
+                {
+                    return relativePath;
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> GetLocaleCandidates(string locale)
+        {
+            yield return locale;
+
+            var separatorIndex = locale.IndexOfAny(new[] { '-', '_' });
+            if (separatorIndex > 0)
+            {
+                yield return locale[..separatorIndex];
+            }
         }
 
     }

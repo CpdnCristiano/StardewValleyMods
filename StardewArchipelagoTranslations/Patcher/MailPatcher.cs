@@ -37,23 +37,34 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 GiftTemplates.Clear();
 
                 string locale = helper.Translation.Locale;
-                string dirPath = System.IO.Path.Combine(
-                    helper.DirectoryPath,
-                    "templates",
-                    "mail",
-                    locale
-                );
+                string dirPath = string.Empty;
+                string selectedLocale = string.Empty;
 
-                if (!System.IO.Directory.Exists(dirPath))
+                foreach (var candidate in GetLocaleCandidates(locale))
                 {
-                    // Fall back to default English templates directory
+                    var candidateDir = System.IO.Path.Combine(
+                        helper.DirectoryPath,
+                        "templates",
+                        "mail",
+                        candidate
+                    );
+                    if (System.IO.Directory.Exists(candidateDir))
+                    {
+                        dirPath = candidateDir;
+                        selectedLocale = candidate;
+                        break;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(dirPath))
+                {
                     dirPath = System.IO.Path.Combine(
                         helper.DirectoryPath,
                         "templates",
                         "mail",
                         "default"
                     );
-                    locale = "default";
+                    selectedLocale = "default";
                 }
 
                 if (System.IO.Directory.Exists(dirPath))
@@ -63,7 +74,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     {
                         var category = System.IO.Path.GetFileNameWithoutExtension(file);
                         var loaded = helper.Data.ReadJsonFile<MailCategoryData>(
-                            $"templates/mail/{locale}/{category}.json"
+                            $"templates/mail/{selectedLocale}/{category}.json"
                         );
 
                         if (loaded != null)
@@ -90,6 +101,20 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                     $"Failed to load mail templates: {ex}",
                     LogLevel.Error
                 );
+            }
+        }
+
+        private static IEnumerable<string> GetLocaleCandidates(string locale)
+        {
+            if (!string.IsNullOrWhiteSpace(locale))
+            {
+                yield return locale;
+
+                var separatorIndex = locale.IndexOfAny(new[] { '-', '_' });
+                if (separatorIndex > 0)
+                {
+                    yield return locale[..separatorIndex];
+                }
             }
         }
 

@@ -29,6 +29,25 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                         .Translation.Get("chat.connected", new { slot = m.Groups[1].Value })
                         .ToString()
             ),
+            // "Connected to Archipelago server as Cristiano (Team 0)."
+            (
+                new Regex(
+                    @"^Connected to Archipelago server as (.+?)\.$",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                m =>
+                    ModEntry
+                        .Translation.Get("chat.connected_server", new { slot = m.Groups[1].Value })
+                        .ToString()
+            ),
+            // "Now that you are connected, you can use !help to list commands to run via the server. If your client supports it, you may have additional local commands you can list with /help."
+            (
+                new Regex(
+                    @"^Now that you are connected,",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                _ => ModEntry.Translation.Get("chat.help_server").ToString()
+            ),
             // "A Fatal error has occurred while initializing Archipelago. Check SMAPI for details to report the problem"
             (
                 new Regex(
