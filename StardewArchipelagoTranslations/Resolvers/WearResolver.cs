@@ -7,7 +7,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class WearResolver : ILocationResolver
     {
-        private static Dictionary<string, string>? _vanillaHatsNameMap;
+        private static Dictionary<string, string>? _hatQualifiedIdsByEnglishName;
+        private static Dictionary<string, string>? _localizedHatNamesByQualifiedId;
+        private static LocalizedContentManager.LanguageCode _cacheLang =
+            (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _hatsLock = new object();
 
         public bool TryResolve(string englishName, out string? localizedName)
@@ -33,25 +36,37 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_hatsLock)
             {
-                _vanillaHatsNameMap = null;
+                _hatQualifiedIdsByEnglishName = null;
+                _localizedHatNamesByQualifiedId = null;
+                _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
         }
 
         private static void EnsureHatsMap()
         {
-            if (_vanillaHatsNameMap != null)
+            var currentLang = LocalizedContentManager.CurrentLanguageCode;
+            if (
+                _hatQualifiedIdsByEnglishName != null
+                && _localizedHatNamesByQualifiedId != null
+                && _cacheLang == currentLang
+            )
             {
                 return;
             }
 
             lock (_hatsLock)
             {
-                if (_vanillaHatsNameMap != null)
+                if (
+                    _hatQualifiedIdsByEnglishName != null
+                    && _localizedHatNamesByQualifiedId != null
+                    && _cacheLang == currentLang
+                )
                 {
                     return;
                 }
 
-                var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var idsByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var localizedById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
                 using var engManager = new Microsoft.Xna.Framework.Content.ContentManager(
                     Game1.game1.Content.ServiceProvider,
@@ -89,14 +104,22 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         var internalName = parts[0];
                         var qualifiedId = $"(H){pair.Key}";
 
-                        map.TryAdd(internalName, qualifiedId);
+                        idsByName.TryAdd(internalName, qualifiedId);
 
                         var cleanName = ResolverText.ToCompactKeySegment(internalName);
-                        map.TryAdd(cleanName, qualifiedId);
+                        idsByName.TryAdd(cleanName, qualifiedId);
+
+                        var data = ItemRegistry.GetData(qualifiedId);
+                        if (data != null && !string.IsNullOrWhiteSpace(data.DisplayName))
+                        {
+                            localizedById[qualifiedId] = data.DisplayName;
+                        }
                     }
                 }
 
-                _vanillaHatsNameMap = map;
+                _hatQualifiedIdsByEnglishName = idsByName;
+                _localizedHatNamesByQualifiedId = localizedById;
+                _cacheLang = currentLang;
             }
         }
 
@@ -110,23 +133,23 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var underscoreLookupKey = ResolverText.ToKeySegment(englishHatName);
 
                 string? qualId = null;
-                _vanillaHatsNameMap!.TryGetValue(englishHatName, out qualId);
+                _hatQualifiedIdsByEnglishName!.TryGetValue(englishHatName, out qualId);
                 if (qualId == null)
                 {
-                    _vanillaHatsNameMap.TryGetValue(underscoreLookupKey, out qualId);
+                    _hatQualifiedIdsByEnglishName.TryGetValue(underscoreLookupKey, out qualId);
                 }
                 if (qualId == null)
                 {
-                    _vanillaHatsNameMap.TryGetValue(cleanLookupKey, out qualId);
+                    _hatQualifiedIdsByEnglishName.TryGetValue(cleanLookupKey, out qualId);
                 }
 
-                if (qualId != null)
+                if (
+                    qualId != null
+                    && _localizedHatNamesByQualifiedId!.TryGetValue(qualId, out var localizedName)
+                    && !string.IsNullOrWhiteSpace(localizedName)
+                )
                 {
-                    var data = ItemRegistry.GetData(qualId);
-                    if (data != null && !string.IsNullOrWhiteSpace(data.DisplayName))
-                    {
-                        return data.DisplayName;
-                    }
+                    return localizedName;
                 }
             }
             catch (Exception ex)

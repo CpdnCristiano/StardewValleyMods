@@ -56,6 +56,20 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
                 ),
                 _ => ModEntry.Translation.Get("chat.fatal_error").ToString()
             ),
+            (
+                new Regex(
+                    @"^Unknown Error occurred while sending (gift|trap)\.$",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                m => ModEntry.Translation.Get("gift.send_unknown_error", new { kind = m.Groups[1].Value }).ToString()
+            ),
+            (
+                new Regex(
+                    @"^Could not complete gifting operation\. Check SMAPI for error details\.$",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                _ => ModEntry.Translation.Get("gift.operation_failed").ToString()
+            ),
         };
 
         [HarmonyPrefix]

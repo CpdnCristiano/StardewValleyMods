@@ -8,7 +8,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class VanillaObjectResolver : IItemResolver
     {
-        private static Dictionary<string, string>? _vanillaObjectsNameMap;
+        private static Dictionary<string, string>? _objectQualifiedIdsByEnglishName;
         private static readonly object _objectsLock = new();
 
         public bool TryResolve(string englishName, out string? localizedName)
@@ -22,24 +22,26 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 var underscoreLookupKey = ResolverText.ToKeySegment(englishName);
 
                 string? qualId = null;
-                _vanillaObjectsNameMap!.TryGetValue(englishName, out qualId);
+                _objectQualifiedIdsByEnglishName!.TryGetValue(englishName, out qualId);
                 if (qualId == null)
                 {
-                    _vanillaObjectsNameMap.TryGetValue(underscoreLookupKey, out qualId);
+                    _objectQualifiedIdsByEnglishName.TryGetValue(underscoreLookupKey, out qualId);
                 }
                 if (qualId == null)
                 {
-                    _vanillaObjectsNameMap.TryGetValue(cleanLookupKey, out qualId);
+                    _objectQualifiedIdsByEnglishName.TryGetValue(cleanLookupKey, out qualId);
                 }
 
-                if (qualId != null)
+                if (
+                    qualId != null
+                    && TranslationHelper.TryGetLocalizedDisplayNameByQualifiedId(
+                        qualId,
+                        out var displayName
+                    )
+                )
                 {
-                    var data = ItemRegistry.GetData(qualId);
-                    if (data != null && !string.IsNullOrWhiteSpace(data.DisplayName))
-                    {
-                        localizedName = data.DisplayName;
-                        return true;
-                    }
+                    localizedName = displayName;
+                    return true;
                 }
             }
             catch { }
@@ -50,14 +52,14 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
         private static void EnsureObjectMap()
         {
-            if (_vanillaObjectsNameMap != null)
+            if (_objectQualifiedIdsByEnglishName != null)
             {
                 return;
             }
 
             lock (_objectsLock)
             {
-                if (_vanillaObjectsNameMap != null)
+                if (_objectQualifiedIdsByEnglishName != null)
                 {
                     return;
                 }
@@ -147,7 +149,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     }
                 }
 
-                _vanillaObjectsNameMap = map;
+                _objectQualifiedIdsByEnglishName = map;
             }
         }
 
@@ -155,7 +157,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_objectsLock)
             {
-                _vanillaObjectsNameMap = null;
+                _objectQualifiedIdsByEnglishName = null;
             }
         }
     }

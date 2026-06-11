@@ -41,7 +41,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             BillboardPatcher.Patch(harmony);
             ChatForwarderPatcher.Patch(harmony);
             BankHandlerPatcher.Patch(harmony);
+            GiftSenderPatcher.Patch(harmony);
             HintHelperPatcher.Patch(harmony);
+            JunimoShopStockModifierPatcher.Patch(harmony);
             KaitoStardropDialoguePatcher.Patch(harmony);
             StardropJokesPatcher.Patch(harmony);
             // CasinoPatcher.Patch(harmony);

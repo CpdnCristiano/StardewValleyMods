@@ -12,8 +12,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
     {
         private static readonly Regex _quantityPattern = new(@"^([\d,]+)\s+(.+)$");
         private static readonly object _cacheLock = new();
-        private static Dictionary<string, string>? _objectNamesCache;
-        private static LocalizedContentManager.LanguageCode _cacheLang =
+        private static Dictionary<string, string>? _englishObjectKeysByName;
+        private static Dictionary<string, string>? _localizedObjectNamesByKey;
+        private static LocalizedContentManager.LanguageCode _localizedCacheLang =
             (LocalizedContentManager.LanguageCode)(-1);
 
         public bool TryResolve(string englishName, out string? localizedName)
@@ -63,8 +64,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_cacheLock)
             {
-                _objectNamesCache = null;
-                _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
+                _englishObjectKeysByName = null;
+                _localizedObjectNamesByKey = null;
+                _localizedCacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
         }
 
@@ -72,40 +74,50 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             localizedName = null;
 
-            if (_objectNamesCache == null)
+            if (_englishObjectKeysByName == null || _localizedObjectNamesByKey == null)
             {
                 return false;
             }
 
-            if (_objectNamesCache.TryGetValue(englishName.Trim(), out localizedName))
+            if (_englishObjectKeysByName.TryGetValue(englishName.Trim(), out var objectKey))
             {
-                return true;
+                return _localizedObjectNamesByKey.TryGetValue(objectKey, out localizedName);
             }
 
-            return _objectNamesCache.TryGetValue(NormalizeName(englishName), out localizedName);
+            return _englishObjectKeysByName.TryGetValue(NormalizeName(englishName), out objectKey)
+                && _localizedObjectNamesByKey.TryGetValue(objectKey, out localizedName);
         }
 
         private static void EnsureObjectNamesCache()
         {
             var currentLang = LocalizedContentManager.CurrentLanguageCode;
-            if (_objectNamesCache != null && _cacheLang == currentLang)
+            if (
+                _englishObjectKeysByName != null
+                && _localizedObjectNamesByKey != null
+                && _localizedCacheLang == currentLang
+            )
             {
                 return;
             }
 
             lock (_cacheLock)
             {
-                if (_objectNamesCache != null && _cacheLang == currentLang)
+                if (
+                    _englishObjectKeysByName != null
+                    && _localizedObjectNamesByKey != null
+                    && _localizedCacheLang == currentLang
+                )
                 {
                     return;
                 }
 
-                _objectNamesCache = BuildCache();
-                _cacheLang = currentLang;
+                _englishObjectKeysByName ??= BuildEnglishObjectKeysByName();
+                _localizedObjectNamesByKey = BuildLocalizedNamesByKey();
+                _localizedCacheLang = currentLang;
             }
         }
 
-        private static Dictionary<string, string> BuildCache()
+        private static Dictionary<string, string> BuildEnglishObjectKeysByName()
         {
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -116,9 +128,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                     Game1.content.RootDirectory
                 );
 
-                var engStrings = engManager.Load<Dictionary<string, string>>("Strings\\Objects");
                 var locStrings = Game1.content.Load<Dictionary<string, string>>("Strings\\Objects");
-
+                var engStrings = engManager.Load<Dictionary<string, string>>("Strings\\Objects");
                 foreach (var pair in engStrings)
                 {
                     if (!pair.Key.EndsWith("_Name", StringComparison.OrdinalIgnoreCase))
@@ -126,39 +137,58 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         continue;
                     }
 
-                    if (!locStrings.TryGetValue(pair.Key, out var localizedValue))
-                    {
-                        continue;
-                    }
-
                     var englishName = pair.Value?.Trim();
-                    var localizedName = localizedValue?.Trim();
-
-                    if (
-                        string.IsNullOrWhiteSpace(englishName)
-                        || string.IsNullOrWhiteSpace(localizedName)
-                    )
+                    if (string.IsNullOrWhiteSpace(englishName))
                     {
                         continue;
                     }
 
-                    cache.TryAdd(englishName, localizedName);
-                    cache.TryAdd(NormalizeName(englishName), localizedName);
+                    cache.TryAdd(englishName, pair.Key);
+                    cache.TryAdd(NormalizeName(englishName), pair.Key);
 
                     var keyName = pair.Key[..^"_Name".Length];
-                    cache.TryAdd(keyName, localizedName);
-                    cache.TryAdd(NormalizeName(keyName), localizedName);
+                    cache.TryAdd(keyName, pair.Key);
+                    cache.TryAdd(NormalizeName(keyName), pair.Key);
                 }
-
-                ModEntry.Instance.Monitor.Log(
-                    $"[StringsObjectNameResolver] Loaded {cache.Count} object name entries.",
-                    LogLevel.Trace
-                );
             }
             catch (Exception ex)
             {
                 ModEntry.Instance.Monitor.Log(
-                    $"[StringsObjectNameResolver] Error building cache: {ex}",
+                    $"[StringsObjectNameResolver] Error building localized cache: {ex}",
+                    LogLevel.Warn
+                );
+            }
+
+            return cache;
+        }
+
+        private static Dictionary<string, string> BuildLocalizedNamesByKey()
+        {
+            var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                var locStrings = Game1.content.Load<Dictionary<string, string>>("Strings\\Objects");
+                foreach (var pair in locStrings)
+                {
+                    if (!pair.Key.EndsWith("_Name", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var localizedName = pair.Value?.Trim();
+                    if (string.IsNullOrWhiteSpace(localizedName))
+                    {
+                        continue;
+                    }
+
+                    cache[pair.Key] = localizedName;
+                }
+            }
+            catch (Exception ex)
+            {
+                ModEntry.Instance.Monitor.Log(
+                    $"[StringsObjectNameResolver] Error building localized cache: {ex}",
                     LogLevel.Warn
                 );
             }

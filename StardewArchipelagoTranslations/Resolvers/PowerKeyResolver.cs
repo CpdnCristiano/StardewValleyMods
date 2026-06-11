@@ -7,8 +7,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class PowerKeyResolver : IItemResolver
     {
-        private static Dictionary<string, string>? _vanillaPowersNameMap;
-        private static LocalizedContentManager.LanguageCode _cacheLang =
+        private static Dictionary<string, string>? _powerKeysByEnglishName;
+        private static Dictionary<string, string>? _localizedPowerNamesByKey;
+        private static LocalizedContentManager.LanguageCode _localizedCacheLang =
             (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _powersLock = new();
 
@@ -33,12 +34,14 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
                 var cleanKey = ResolverText.ToCompactKeySegment(englishName);
                 if (
-                    _vanillaPowersNameMap!.TryGetValue(cleanKey, out var rawDisplayName)
-                    || _vanillaPowersNameMap.TryGetValue(englishName, out rawDisplayName)
+                    _powerKeysByEnglishName!.TryGetValue(cleanKey, out var powerKeyName)
+                    || _powerKeysByEnglishName.TryGetValue(englishName, out powerKeyName)
                 )
                 {
-                    var localized = TokenParser.ParseText(rawDisplayName);
-                    if (!string.IsNullOrWhiteSpace(localized))
+                    if (
+                        _localizedPowerNamesByKey!.TryGetValue(powerKeyName, out var localized)
+                        && !string.IsNullOrWhiteSpace(localized)
+                    )
                     {
                         localizedName = localized;
                         return true;
@@ -58,19 +61,39 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static void EnsurePowersMap()
         {
             var currentLang = LocalizedContentManager.CurrentLanguageCode;
-            if (_vanillaPowersNameMap != null && _cacheLang == currentLang)
+            if (
+                _powerKeysByEnglishName != null
+                && _localizedPowerNamesByKey != null
+                && _localizedCacheLang == currentLang
+            )
             {
                 return;
             }
 
             lock (_powersLock)
             {
-                if (_vanillaPowersNameMap != null && _cacheLang == currentLang)
+                if (
+                    _powerKeysByEnglishName != null
+                    && _localizedPowerNamesByKey != null
+                    && _localizedCacheLang == currentLang
+                )
                 {
                     return;
                 }
 
-                var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                _powerKeysByEnglishName ??= BuildEnglishPowerKeys();
+                _localizedPowerNamesByKey = BuildLocalizedPowerNamesByKey();
+                _localizedCacheLang = currentLang;
+            }
+        }
+
+        private static Dictionary<string, string> BuildEnglishPowerKeys()
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var savedLang = LocalizedContentManager.CurrentLanguageCode;
+            LocalizedContentManager.CurrentLanguageCode = LocalizedContentManager.LanguageCode.en;
+            try
+            {
                 var powers = Game1.content.Load<
                     Dictionary<string, StardewValley.GameData.Powers.PowersData>
                 >("Data\\Powers");
@@ -78,28 +101,63 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 {
                     foreach (var pair in powers)
                     {
-                        if (pair.Value == null || string.IsNullOrWhiteSpace(pair.Value.DisplayName))
+                        if (pair.Value == null)
                         {
                             continue;
                         }
 
-                        map[pair.Key] = pair.Value.DisplayName;
-                        var cleanPairKey = ResolverText.ToCompactKeySegment(pair.Key);
-                        map[cleanPairKey] = pair.Value.DisplayName;
+                        map[pair.Key] = pair.Key;
+                        map[ResolverText.ToCompactKeySegment(pair.Key)] = pair.Key;
+
+                        if (!string.IsNullOrWhiteSpace(pair.Value.DisplayName))
+                        {
+                            map[pair.Value.DisplayName] = pair.Key;
+                            map[ResolverText.ToCompactKeySegment(pair.Value.DisplayName)] = pair.Key;
+                        }
                     }
                 }
-
-                _vanillaPowersNameMap = map;
-                _cacheLang = currentLang;
             }
+            finally
+            {
+                LocalizedContentManager.CurrentLanguageCode = savedLang;
+            }
+
+            return map;
+        }
+
+        private static Dictionary<string, string> BuildLocalizedPowerNamesByKey()
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var powers = Game1.content.Load<
+                Dictionary<string, StardewValley.GameData.Powers.PowersData>
+            >("Data\\Powers");
+            if (powers != null)
+            {
+                foreach (var pair in powers)
+                {
+                    if (pair.Value == null || string.IsNullOrWhiteSpace(pair.Value.DisplayName))
+                    {
+                        continue;
+                    }
+
+                    var localized = TokenParser.ParseText(pair.Value.DisplayName);
+                    if (!string.IsNullOrWhiteSpace(localized))
+                    {
+                        map[pair.Key] = localized;
+                    }
+                }
+            }
+
+            return map;
         }
 
         internal static void ClearCache()
         {
             lock (_powersLock)
             {
-                _vanillaPowersNameMap = null;
-                _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
+                _powerKeysByEnglishName = null;
+                _localizedPowerNamesByKey = null;
+                _localizedCacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
 
             PowerBookNameResolver.ClearCache();

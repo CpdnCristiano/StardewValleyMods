@@ -50,8 +50,6 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 WarmSource(source);
             }
 
-            TranslationHelper.PrepopulateCaches();
-
             ModEntry.Instance.Monitor.Log(
                 $"[TranslationCacheManager] Caches prontos em {total.ElapsedMilliseconds}ms.",
                 LogLevel.Info

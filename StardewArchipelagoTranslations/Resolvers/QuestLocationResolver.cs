@@ -8,7 +8,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class QuestLocationResolver : ILocationResolver
     {
-        private static Dictionary<string, string>? _englishQuestTitleToLocalizedTitleCache;
+        private static Dictionary<string, string>? _questIdsByEnglishTitle;
+        private static Dictionary<string, string>? _localizedQuestTitlesById;
         private static LocalizedContentManager.LanguageCode _cacheLang =
             (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _cacheLock = new();
@@ -36,10 +37,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                 EnsureQuestCache();
 
                 if (
-                    _englishQuestTitleToLocalizedTitleCache!.TryGetValue(
+                    _questIdsByEnglishTitle!.TryGetValue(
                         englishQuestTitle,
-                        out var localizedTitle
+                        out var questId
                     )
+                    && _localizedQuestTitlesById!.TryGetValue(questId, out var localizedTitle)
                 )
                 {
                     localizedName = $"{questPrefix}{localizedTitle}";
@@ -62,19 +64,28 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static void EnsureQuestCache()
         {
             var currentLang = LocalizedContentManager.CurrentLanguageCode;
-            if (_englishQuestTitleToLocalizedTitleCache != null && _cacheLang == currentLang)
+            if (
+                _questIdsByEnglishTitle != null
+                && _localizedQuestTitlesById != null
+                && _cacheLang == currentLang
+            )
             {
                 return;
             }
 
             lock (_cacheLock)
             {
-                if (_englishQuestTitleToLocalizedTitleCache != null && _cacheLang == currentLang)
+                if (
+                    _questIdsByEnglishTitle != null
+                    && _localizedQuestTitlesById != null
+                    && _cacheLang == currentLang
+                )
                 {
                     return;
                 }
 
-                var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var questIdsByTitle = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var localizedTitlesById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
                 using var engManager = new ContentManager(
                     Game1.content.ServiceProvider,
@@ -105,10 +116,12 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                         continue;
                     }
 
-                    cache.TryAdd(engTitle, NormalizeQuestTitle(locParts[1].Trim()));
+                    questIdsByTitle.TryAdd(engTitle, kvp.Key);
+                    localizedTitlesById[kvp.Key] = NormalizeQuestTitle(locParts[1].Trim());
                 }
 
-                _englishQuestTitleToLocalizedTitleCache = cache;
+                _questIdsByEnglishTitle = questIdsByTitle;
+                _localizedQuestTitlesById = localizedTitlesById;
                 _cacheLang = currentLang;
             }
         }
@@ -133,7 +146,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_cacheLock)
             {
-                _englishQuestTitleToLocalizedTitleCache = null;
+                _questIdsByEnglishTitle = null;
+                _localizedQuestTitlesById = null;
                 _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
         }

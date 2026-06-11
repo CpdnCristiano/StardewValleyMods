@@ -10,7 +10,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
     internal static class PowerBookNameResolver
     {
         private static readonly object _cacheLock = new();
-        private static Dictionary<string, string>? _bookNamesCache;
+        private static readonly Dictionary<string, string> _bookIdsByName = BuildBookIdsByName();
+        private static Dictionary<string, string>? _localizedBookNamesById;
         private static LocalizedContentManager.LanguageCode _cacheLang =
             (LocalizedContentManager.LanguageCode)(-1);
 
@@ -25,8 +26,13 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             EnsureCache();
 
-            return _bookNamesCache!.TryGetValue(englishBookName.Trim(), out localizedBookName)
-                || _bookNamesCache.TryGetValue(NormalizeBookName(englishBookName), out localizedBookName);
+            var bookId = GetBookId(englishBookName);
+            if (string.IsNullOrWhiteSpace(bookId))
+            {
+                return false;
+            }
+
+            return _localizedBookNamesById!.TryGetValue(bookId, out localizedBookName);
         }
 
         internal static void WarmUp() => EnsureCache();
@@ -35,7 +41,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_cacheLock)
             {
-                _bookNamesCache = null;
+                _localizedBookNamesById = null;
                 _cacheLang = (LocalizedContentManager.LanguageCode)(-1);
             }
         }
@@ -43,63 +49,77 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static void EnsureCache()
         {
             var currentLang = LocalizedContentManager.CurrentLanguageCode;
-            if (_bookNamesCache != null && _cacheLang == currentLang)
+            if (_localizedBookNamesById != null && _cacheLang == currentLang)
             {
                 return;
             }
 
             lock (_cacheLock)
             {
-                if (_bookNamesCache != null && _cacheLang == currentLang)
+                if (_localizedBookNamesById != null && _cacheLang == currentLang)
                 {
                     return;
                 }
 
-                _bookNamesCache = BuildCache();
+                _localizedBookNamesById = BuildLocalizedNamesById();
                 _cacheLang = currentLang;
             }
         }
 
-        private static Dictionary<string, string> BuildCache()
+        private static Dictionary<string, string> BuildBookIdsByName()
         {
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var pair in PowerBooks.BookNamesToIds)
             {
-                AddBook(cache, pair.Key, pair.Value);
+                AddBookId(cache, pair.Key, pair.Value);
             }
-
-            foreach (var pair in PowerBooks.BookIdsToNames)
-            {
-                AddBook(cache, pair.Value, pair.Key);
-            }
-
-            ModEntry.Instance.Monitor.Log(
-                $"[PowerBookNameResolver] Loaded {cache.Count} power book entries.",
-                LogLevel.Trace
-            );
 
             return cache;
         }
 
-        private static void AddBook(Dictionary<string, string> cache, string englishName, string objectId)
+        private static Dictionary<string, string> BuildLocalizedNamesById()
+        {
+            var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var objectId in PowerBooks.BookIdsToNames.Keys)
+            {
+                var itemData = ItemRegistry.GetDataOrErrorItem($"(O){objectId}");
+                var localizedName = itemData?.DisplayName?.Trim();
+                if (string.IsNullOrWhiteSpace(localizedName))
+                {
+                    continue;
+                }
+
+                cache[objectId] = localizedName;
+            }
+
+            return cache;
+        }
+
+        private static void AddBookId(Dictionary<string, string> cache, string englishName, string objectId)
         {
             if (string.IsNullOrWhiteSpace(englishName) || string.IsNullOrWhiteSpace(objectId))
             {
                 return;
             }
 
-            var itemData = ItemRegistry.GetDataOrErrorItem($"(O){objectId}");
-            var localizedName = itemData?.DisplayName?.Trim();
-            if (string.IsNullOrWhiteSpace(localizedName))
+            cache.TryAdd(englishName.Trim(), objectId);
+            cache.TryAdd(NormalizeBookName(englishName), objectId);
+            cache.TryAdd(objectId.Trim(), objectId);
+            cache.TryAdd(NormalizeBookName(objectId), objectId);
+        }
+
+        private static string? GetBookId(string englishBookName)
+        {
+            var trimmed = englishBookName.Trim();
+            if (_bookIdsByName.TryGetValue(trimmed, out var bookId))
             {
-                return;
+                return bookId;
             }
 
-            cache.TryAdd(englishName.Trim(), localizedName);
-            cache.TryAdd(NormalizeBookName(englishName), localizedName);
-            cache.TryAdd(objectId.Trim(), localizedName);
-            cache.TryAdd(NormalizeBookName(objectId), localizedName);
+            var normalized = NormalizeBookName(englishBookName);
+            return _bookIdsByName.TryGetValue(normalized, out bookId) ? bookId : null;
         }
 
         private static string NormalizeBookName(string text)

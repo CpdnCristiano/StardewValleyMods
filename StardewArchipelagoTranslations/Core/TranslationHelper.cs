@@ -14,6 +14,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static readonly Dictionary<string, string> _resolvedItemNamesCache = new(
             StringComparer.OrdinalIgnoreCase
         );
+        private static readonly Dictionary<string, string> _localizedDisplayNamesByQualifiedId = new(
+            StringComparer.OrdinalIgnoreCase
+        );
         private static readonly Dictionary<string, string> _resolvedLocationNamesCache = new(
             StringComparer.OrdinalIgnoreCase
         );
@@ -126,6 +129,7 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
             lock (_cachesLock)
             {
                 _resolvedItemNamesCache.Clear();
+                _localizedDisplayNamesByQualifiedId.Clear();
                 _resolvedLocationNamesCache.Clear();
                 _translatedDescriptionsCache.Clear();
             }

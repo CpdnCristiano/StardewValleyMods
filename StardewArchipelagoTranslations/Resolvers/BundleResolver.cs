@@ -7,7 +7,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
     public class BundleResolver : ILocationResolver
     {
-        private static Dictionary<string, string>? _vanillaBundlesMap;
+        private static Dictionary<string, string>? _vanillaBundleKeysByEnglishName;
+        private static Dictionary<string, string>? _localizedBundleNamesByKey;
         private static LocalizedContentManager.LanguageCode _vanillaBundlesLang =
             (LocalizedContentManager.LanguageCode)(-1);
         private static readonly object _bundlesLock = new();
@@ -105,14 +106,17 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             lock (_bundlesLock)
             {
-                if (_vanillaBundlesMap != null && _vanillaBundlesLang == currentLang)
+                if (
+                    _vanillaBundleKeysByEnglishName != null
+                    && _localizedBundleNamesByKey != null
+                    && _vanillaBundlesLang == currentLang
+                )
                 {
                     return;
                 }
 
-                _vanillaBundlesMap = new Dictionary<string, string>(
-                    StringComparer.OrdinalIgnoreCase
-                );
+                _vanillaBundleKeysByEnglishName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                _localizedBundleNamesByKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 _vanillaBundlesLang = currentLang;
                 try
                 {
@@ -146,7 +150,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
                                 && !string.IsNullOrWhiteSpace(locName)
                             )
                             {
-                                _vanillaBundlesMap[englishName] = locName;
+                                _vanillaBundleKeysByEnglishName[englishName] = pair.Key;
+                                _localizedBundleNamesByKey[pair.Key] = locName;
                             }
                         }
                     }
@@ -165,7 +170,10 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             EnsureBundlesMap();
 
-            if (_vanillaBundlesMap!.TryGetValue(englishBundleName, out var localizedName))
+            if (
+                _vanillaBundleKeysByEnglishName!.TryGetValue(englishBundleName, out var bundleKey)
+                && _localizedBundleNamesByKey!.TryGetValue(bundleKey, out var localizedName)
+            )
             {
                 return localizedName;
             }
@@ -177,7 +185,8 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         {
             lock (_bundlesLock)
             {
-                _vanillaBundlesMap = null;
+                _vanillaBundleKeysByEnglishName = null;
+                _localizedBundleNamesByKey = null;
                 _vanillaBundlesLang = (LocalizedContentManager.LanguageCode)(-1);
             }
         }

@@ -63,5 +63,43 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             return result;
         }
+
+        internal static bool TryGetLocalizedDisplayNameByQualifiedId(
+            string qualifiedId,
+            out string localizedName
+        )
+        {
+            localizedName = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(qualifiedId))
+            {
+                return false;
+            }
+
+            EnsureCachesValid();
+
+            lock (_cachesLock)
+            {
+                if (_localizedDisplayNamesByQualifiedId.TryGetValue(qualifiedId, out localizedName))
+                {
+                    return !string.IsNullOrWhiteSpace(localizedName);
+                }
+            }
+
+            var data = ItemRegistry.GetData(qualifiedId);
+            var displayName = data?.DisplayName?.Trim();
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return false;
+            }
+
+            lock (_cachesLock)
+            {
+                _localizedDisplayNamesByQualifiedId[qualifiedId] = displayName;
+            }
+
+            localizedName = displayName;
+            return true;
+        }
     }
 }
