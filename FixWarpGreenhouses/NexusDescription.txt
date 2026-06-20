@@ -8,7 +8,7 @@ In the base game, if you have more than one greenhouse (e.g., via Build More Gre
 Additionally, this mod features a [b]dynamic physical cloning system[/b]. When using custom greenhouses with interior sub-locations (like basements, cellars, or seasonal variations), the mod automatically duplicates these interior maps uniquely for each greenhouse you construct. This ensures that your crops, chests, casks, and decorations are kept separate and persistent.
 
 [b]What's New in Version 1.5.0?[/b]
-🔥 [b]Full Seasonal & Interior Compatibility[/b]: Now fully compatible with advanced greenhouse mods that change interiors by season (e.g., [url=https://www.nexusmods.com/stardewvalley/mods/31734]Dray's Four Seasons Greenhouse[/url]).
+🔥 [b]Full Multi-Room & Seasonal Room Isolation[/b]: Now fully compatible with advanced greenhouse mods that add multiple sub-rooms or dedicated seasonal rooms (like the 4 separate rooms in [url=https://www.nexusmods.com/stardewvalley/mods/31734]Dray's Four Seasons Greenhouse[/url]).
 🔥 [b]Dynamic Instancing[/b]: Each greenhouse building gets its own isolated interior maps, preventing item bleeding or duplication between different greenhouses.
 🔥 [b]AlwaysActive / Automate & Cask Support[/b]: All dynamically cloned interior areas are set to "AlwaysActive", allowing casks to age wine and the [b]Automate[/b] mod to run continuously in all of your greenhouses.
 🔥 [b]Seamless Save Loading[/b]: Instanced locations are registered directly during the save load phase. If you uninstall a mod, the game cleans up safely without crashing.
