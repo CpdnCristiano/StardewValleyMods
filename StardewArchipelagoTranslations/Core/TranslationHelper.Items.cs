@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using StardewModdingAPI;
+using StardewValley;
 
 namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 {
@@ -80,8 +81,9 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
 
             lock (_cachesLock)
             {
-                if (_localizedDisplayNamesByQualifiedId.TryGetValue(qualifiedId, out localizedName))
+                if (_localizedDisplayNamesByQualifiedId.TryGetValue(qualifiedId, out var cachedName))
                 {
+                    localizedName = cachedName;
                     return !string.IsNullOrWhiteSpace(localizedName);
                 }
             }

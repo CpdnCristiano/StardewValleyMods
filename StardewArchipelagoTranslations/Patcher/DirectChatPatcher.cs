@@ -58,17 +58,32 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations.Patcher
             ),
             (
                 new Regex(
-                    @"^Unknown Error occurred while sending (gift|trap)\.$",
+                    @"^Reconnection attempt failed$",
                     RegexOptions.IgnoreCase | RegexOptions.Compiled
                 ),
-                m => ModEntry.Translation.Get("gift.send_unknown_error", new { kind = m.Groups[1].Value }).ToString()
+                _ => ModEntry.Translation.Get("client.reconnect_failed").ToString()
             ),
             (
                 new Regex(
-                    @"^Could not complete gifting operation\. Check SMAPI for error details\.$",
+                    @"^Reconnection attempt successful!$",
                     RegexOptions.IgnoreCase | RegexOptions.Compiled
                 ),
-                _ => ModEntry.Translation.Get("gift.operation_failed").ToString()
+                _ => ModEntry.Translation.Get("client.reconnect_success").ToString()
+            ),
+            (
+                new Regex(
+                    @"^Trap Bundle sent (.+?) to (.+?) \((.+?)\)$",
+                    RegexOptions.IgnoreCase | RegexOptions.Compiled
+                ),
+                m => ModEntry.Translation.Get(
+                    "client.trap_bundle_sent",
+                    new
+                    {
+                        itemName = TranslationHelper.GetLocalizedItemName(m.Groups[1].Value),
+                        player = m.Groups[2].Value,
+                        locationName = m.Groups[3].Value,
+                    }
+                ).ToString()
             ),
         };
 

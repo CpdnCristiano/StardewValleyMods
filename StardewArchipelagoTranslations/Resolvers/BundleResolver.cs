@@ -99,7 +99,11 @@ namespace CpdnCristiano.StardewValleyMod.StardewArchipelagoTranslations
         private static void EnsureBundlesMap()
         {
             var currentLang = LocalizedContentManager.CurrentLanguageCode;
-            if (_vanillaBundlesMap != null && _vanillaBundlesLang == currentLang)
+            if (
+                _vanillaBundleKeysByEnglishName != null
+                && _localizedBundleNamesByKey != null
+                && _vanillaBundlesLang == currentLang
+            )
             {
                 return;
             }
