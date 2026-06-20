@@ -20,5 +20,25 @@ public class ModEntry : Mod
             patches.Add(new UiInfo2AltPatcher());
         }
         HarmonyPatcher.Apply(this, patches.ToArray());
+
+        helper.ConsoleCommands.Add("fit_size", "Altera o tamanho máximo do inventário do jogador. Exemplo: fit_size 60", this.SetInventorySize);
+    }
+
+    private void SetInventorySize(string command, string[] args)
+    {
+        if (StardewValley.Game1.player == null)
+        {
+            this.Monitor.Log("Nenhum save carregado! Carregue um save antes de rodar o comando.", LogLevel.Error);
+            return;
+        }
+
+        int size = 60; // tamanho padrão
+        if (args.Length > 0 && int.TryParse(args[0], out int parsedSize))
+        {
+            size = parsedSize;
+        }
+
+        StardewValley.Game1.player.maxItems.Value = size;
+        this.Monitor.Log($"Inventário alterado com sucesso para {size} slots ({size / 12} linhas)!", LogLevel.Info);
     }
 }
