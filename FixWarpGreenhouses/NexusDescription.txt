@@ -1,0 +1,42 @@
+[b][size=5]Fix Warp Greenhouses[/size][/b]
+
+[b]Description[/b]
+Fix Warp Greenhouses is a mod for Stardew Valley that fixes the teleport and warp logic when using multiple greenhouses, as well as complex custom greenhouses with seasonal sub-locations (interiors) or basements. 
+
+In the base game, if you have more than one greenhouse (e.g., via Build More Greenhouses), you always exit from the default/main greenhouse when using an internal warp. This mod intercepts the warp target resolution, ensuring that when you enter a specific greenhouse building, you always return to and exit from that exact building.
+
+Additionally, this mod features a [b]dynamic physical cloning system[/b]. When using custom greenhouses with interior sub-locations (like basements, cellars, or seasonal variations), the mod automatically duplicates these interior maps uniquely for each greenhouse you construct. This ensures that your crops, chests, casks, and decorations are kept separate and persistent.
+
+[b]What's New in Version 1.5.0?[/b]
+🔥 [b]Full Seasonal & Interior Compatibility[/b]: Now fully compatible with advanced greenhouse mods that change interiors by season (e.g., Draylon's Seasonal Greenhouses).
+🔥 [b]Dynamic Instancing[/b]: Each greenhouse building gets its own isolated interior maps, preventing item bleeding or duplication between different greenhouses.
+🔥 [b]AlwaysActive / Automate & Cask Support[/b]: All dynamically cloned interior areas are set to "AlwaysActive", allowing casks to age wine and the [b]Automate[/b] mod to run continuously in all of your greenhouses.
+🔥 [b]Seamless Save Loading[/b]: Instanced locations are registered directly during the save load phase. If you uninstall a mod, the game cleans up safely without crashing.
+
+[b]Main Features[/b]
+✅ Fixes internal teleportation and exit warps between multiple greenhouses.
+✅ Automatically clones and isolates interior sub-locations (cellars, basements, seasonal maps) for each constructed greenhouse.
+✅ Ensures consistency when entering and exiting different greenhouses.
+✅ Solves the teleport issue in [b][url=https://www.nexusmods.com/stardewvalley/mods/3969]Oasis Greenhouse[/url][/b], keeping its basement warp separate.
+✅ Compatible with mods that add multiple greenhouses, such as [b][url=https://www.nexusmods.com/stardewvalley/mods/21778]Build More Greenhouses[/url][/b].
+
+[b]How It Works[/b]
+The mod scans the warp graph of all greenhouses in your farm, detects their interior sub-locations, and dynamically clones them for each physical greenhouse building. The mod redirects warps and map assets on the fly so everything maps correctly to the original graphic files, avoiding missing texture errors.
+
+[b]Installation[/b]
+[list=1]
+[*]Make sure you have [b]SMAPI[/b] installed.[/*]
+[*]Download and extract the mod into your [code]Mods[/code] folder.[/*]
+[*]Launch the game through SMAPI and enjoy the fix![/*]
+[/list]
+
+[b]Compatibility[/b]
+✅ Compatible with Stardew Valley 1.6.
+✅ Compatible with [b]Automate[/b] and building mods.
+✅ Works with the majority of mods that add multiple greenhouses or modify the greenhouse interiors/seasons.
+
+[b]Tested and verified with:[/b]
+✅  [b][url=https://www.nexusmods.com/stardewvalley/mods/3969]Oasis Greenhouse[/url][/b]
+✅  [b][url=https://www.nexusmods.com/stardewvalley/mods/19439]Hoody's Greenhouse with Cellar[/url][/b]
+✅  [b][url=https://www.nexusmods.com/stardewvalley/mods/16405]Hoody's Aimon's Fancy Greenhouse[/url][/b]
+✅  [b]Draylon's Seasonal Greenhouse Mod (and other seasonal/sub-location mods)[/b]
