@@ -1,0 +1,10 @@
+{
+  "Name": "Artisan Quality Downgrade",
+  "Author": "CpdnCristiano",
+  "Version": "1.0.0",
+  "Description": "Artisan goods retain the quality of their input items, but reduced by one tier.",
+  "UniqueID": "CpdnCristiano.ArtisanQualityDowngrade",
+  "EntryDll": "ArtisanQualityDowngrade.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}
