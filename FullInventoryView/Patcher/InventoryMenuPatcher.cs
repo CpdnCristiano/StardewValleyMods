@@ -846,14 +846,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return;
             if (InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots || slots.Count == 0) return;
-            if (InventoryPageOrganizeButtonField.GetValue(page) is not ClickableTextureComponent organizeButton) return;
             if (state.UpArrow == null || state.DownArrow == null) return;
 
             ClickableComponent firstSlot = slots[0];
             int bottomSlotIndex = Math.Min(slots.Count - 1, (MAX_ROW_COUNT - 1) * DEFAULT_COLUMN_COUNT);
             ClickableComponent lastRowAnchor = slots[bottomSlotIndex];
 
-            int targetX = organizeButton.bounds.Center.X - (state.UpArrow.bounds.Width / 2);
+            var organizeButton = InventoryPageOrganizeButtonField.GetValue(page) as ClickableTextureComponent;
+            int targetX = organizeButton != null ? organizeButton.bounds.Center.X - (state.UpArrow.bounds.Width / 2) : lastRowAnchor.bounds.Right + 32;
+
             int upY = firstSlot.bounds.Y;
             int downY = lastRowAnchor.bounds.Y + (lastRowAnchor.bounds.Height - state.DownArrow.bounds.Height);
 
@@ -862,8 +863,86 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             state.DownArrow.bounds.X = targetX;
             state.DownArrow.bounds.Y = downY;
 
-            // Restaura o botão Organizar exatamente no centro vertical entre as duas setas
-            organizeButton.bounds.Y = upY + ((state.DownArrow.bounds.Bottom - state.UpArrow.bounds.Top) / 2) - (organizeButton.bounds.Height / 2);
+            var rightEdge = lastRowAnchor.bounds.Right - 16;
+            var middleButtons = new List<ClickableComponent>();
+
+            if (organizeButton != null)
+                middleButtons.Add(organizeButton);
+            if (page.trashCan != null)
+                middleButtons.Add(page.trashCan);
+
+            if (page.allClickableComponents != null)
+            {
+                foreach (var c in page.allClickableComponents)
+                {
+                    if (c == null || c == state.UpArrow || c == state.DownArrow || c == organizeButton || c == page.trashCan)
+                        continue;
+                    if (c.name == "charPortrait" || c == page.portrait)
+                        continue;
+
+                    if (c.bounds.Center.X > rightEdge && c.bounds.Center.X < rightEdge + 300)
+                    {
+                        if (c.bounds.Y >= upY - 32 && c.bounds.Y <= downY + 64)
+                        {
+                            middleButtons.Add(c);
+                        }
+                    }
+                }
+            }
+
+            middleButtons = middleButtons.Distinct().ToList();
+            if (middleButtons.Count == 0) return;
+
+            // Cache the original Y position relative to the menu top (upY) on first sight
+            foreach (var b in middleButtons)
+            {
+                if (!state.OriginalY.ContainsKey(b))
+                {
+                    state.OriginalY[b] = b.bounds.Y - upY;
+                }
+            }
+
+            // Sort middleButtons based on their cached original Y offset
+            middleButtons = middleButtons.OrderBy(b => state.OriginalY[b]).ToList();
+
+            // Layout the middle buttons vertically between UpArrow.bounds.Bottom and DownArrow.bounds.Top
+            int startY = state.UpArrow.bounds.Bottom + 16;
+            int endY = state.DownArrow.bounds.Top - 16;
+            int availableHeight = endY - startY;
+            int totalButtonsHeight = middleButtons.Sum(b => b.bounds.Height);
+
+            if (middleButtons.Count == 1)
+            {
+                var b = middleButtons[0];
+                b.bounds.X = targetX + (state.UpArrow.bounds.Width - b.bounds.Width) / 2;
+                b.bounds.Y = startY + (availableHeight - b.bounds.Height) / 2;
+            }
+            else
+            {
+                int spacing = (availableHeight - totalButtonsHeight) / (middleButtons.Count - 1);
+                if (spacing < 8)
+                {
+                    spacing = 8;
+                    int stackHeight = totalButtonsHeight + (spacing * (middleButtons.Count - 1));
+                    int currentY = startY + (availableHeight - stackHeight) / 2;
+                    foreach (var b in middleButtons)
+                    {
+                        b.bounds.X = targetX + (state.UpArrow.bounds.Width - b.bounds.Width) / 2;
+                        b.bounds.Y = currentY;
+                        currentY += b.bounds.Height + spacing;
+                    }
+                }
+                else
+                {
+                    int currentY = startY;
+                    foreach (var b in middleButtons)
+                    {
+                        b.bounds.X = targetX + (state.UpArrow.bounds.Width - b.bounds.Width) / 2;
+                        b.bounds.Y = currentY;
+                        currentY += b.bounds.Height + spacing;
+                    }
+                }
+            }
         }
 
         private static void AddClickableComponent(InventoryPage page, ClickableComponent component)
@@ -1053,6 +1132,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public ClickableTextureComponent? DownArrow;
             public int LastRightStickDirection;
             public int LastComponentsHash;
+            public readonly Dictionary<ClickableComponent, int> OriginalY = new();
         }
 
         private sealed class ScrollableInventoryList : IList<Item>
