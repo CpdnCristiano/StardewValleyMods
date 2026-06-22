@@ -67,6 +67,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 + ((GetExtraRow() - 1) * IClickableMenu.spaceBetweenTabs);
         }
 
+        public static int GetDoubleExtraHeight()
+        {
+            return GetExtraHeight() * 2;
+        }
+
+
+
         private static int GetCapacity()
         {
             return VisibleRows * DEFAULT_COLUMN_COUNT;
@@ -197,24 +204,25 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             );
             harmony.Patch(
                 original: this.RequireMethod<GameMenu>(nameof(GameMenu.update), new Type[] { typeof(GameTime) }),
-                postfix: this.GetHarmonyMethod(nameof(GameMenuUpdatePostfix))
+                postfix: this.GetHarmonyMethod(nameof(GameMenuUpdatePostfix), (int)Priority.Last)
             );
 
-            // Injeção de navegação na página do inventário
+            // Injeção de navegação na página do inventário com prioridade Last (roda por último)
             harmony.Patch(
                 original: this.RequireMethod<InventoryPage>(nameof(InventoryPage.setUpForGamePadMode)),
-                postfix: this.GetHarmonyMethod(nameof(InventoryPageSetUpForGamePadModePostfix))
+                postfix: this.GetHarmonyMethod(nameof(InventoryPageSetUpForGamePadModePostfix), (int)Priority.Last)
             );
 
-            // Injeção MASTER no GameMenu: Garante que o jogo base não sobrescreva a nossa navegação ao iniciar!
+            // Injeção MASTER no GameMenu com prioridade Last
             harmony.Patch(
                 original: this.RequireMethod<GameMenu>(nameof(GameMenu.setUpForGamePadMode)),
-                postfix: this.GetHarmonyMethod(nameof(GameMenuSetUpForGamePadModePostfix))
+                postfix: this.GetHarmonyMethod(nameof(GameMenuSetUpForGamePadModePostfix), (int)Priority.Last)
             );
 
+            // População com prioridade Last para rodar depois de todos os outros mods
             harmony.Patch(
                 original: this.RequireMethod<IClickableMenu>(nameof(IClickableMenu.populateClickableComponentList)),
-                postfix: this.GetHarmonyMethod(nameof(PopulateClickableComponentListPostfix))
+                postfix: this.GetHarmonyMethod(nameof(PopulateClickableComponentListPostfix), (int)Priority.Last)
             );
 
             harmony.Patch(
@@ -225,20 +233,18 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void GameMenuSetUpForGamePadModePostfix(GameMenu __instance)
         {
+            if (__instance.allClickableComponents == null) return;
             if (__instance.GetCurrentPage() is not InventoryPage page) return;
-            if (!TryGetPageState(page, out PageScrollState? state, create: true) || state == null) return;
 
             EnsureScrollButtons(page);
 
-            // Forçamos as setas diretamente para a lista mestre do GameMenu
-            if (state.UpArrow != null && !__instance.allClickableComponents.Contains(state.UpArrow)) __instance.allClickableComponents.Add(state.UpArrow);
-            if (state.DownArrow != null && !__instance.allClickableComponents.Contains(state.DownArrow)) __instance.allClickableComponents.Add(state.DownArrow);
-
-            // Aplicamos a costura tendo a lista do menu principal como base
-            if (__instance.allClickableComponents != null)
+            if (TryGetPageState(page, out PageScrollState? state) && state != null)
             {
-                WireGamepadNavigation(page, state, __instance.allClickableComponents);
+                if (state.UpArrow != null && !__instance.allClickableComponents.Contains(state.UpArrow)) __instance.allClickableComponents.Add(state.UpArrow);
+                if (state.DownArrow != null && !__instance.allClickableComponents.Contains(state.DownArrow)) __instance.allClickableComponents.Add(state.DownArrow);
             }
+
+            WireGamepadNavigation(page, __instance.allClickableComponents);
         }
 
         private static void PopulateClickableComponentListPostfix(IClickableMenu __instance)
@@ -251,43 +257,98 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPageSetUpForGamePadModePostfix(InventoryPage __instance)
         {
-            if (!TryGetPageState(__instance, out PageScrollState? state, create: true) || state == null) return;
+            if (__instance.allClickableComponents == null) return;
 
             EnsureScrollButtons(__instance);
-            if (__instance.allClickableComponents != null)
-            {
-                WireGamepadNavigation(__instance, state, __instance.allClickableComponents);
-            }
+            WireGamepadNavigation(__instance, __instance.allClickableComponents);
         }
 
-        private static void WireGamepadNavigation(InventoryPage page, PageScrollState state, List<ClickableComponent> activeComponents)
+        internal static void WireGamepadNavigation(InventoryPage page, List<ClickableComponent> activeComponents)
         {
-            if (activeComponents == null || state.UpArrow == null || state.DownArrow == null) return;
+            if (activeComponents == null || activeComponents.Count == 0) return;
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return;
             if (InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots || slots.Count == 0) return;
 
-            // 1. Garante que as setas existem na lista
-            if (!activeComponents.Contains(state.UpArrow)) activeComponents.Add(state.UpArrow);
-            if (!activeComponents.Contains(state.DownArrow)) activeComponents.Add(state.DownArrow);
+            // Use a HashSet for O(1) lookups of components currently in activeComponents
+            var activeSet = new HashSet<ClickableComponent>(activeComponents);
+
+            // Sincroniza qualquer componente tardio adicionado por outros mods na página para a lista mestre
+            if (Game1.activeClickableMenu is GameMenu gameMenu && gameMenu.allClickableComponents == activeComponents)
+            {
+                if (page.allClickableComponents != null)
+                {
+                    foreach (var c in page.allClickableComponents)
+                    {
+                        if (c != null && activeSet.Add(c))
+                        {
+                            activeComponents.Add(c);
+                        }
+                    }
+                }
+            }
+
+            // 1. Coleta as setas de rolagem do estado se existirem
+            PageStates.TryGetValue(page, out PageScrollState? state);
+            if (state != null)
+            {
+                if (state.UpArrow != null && activeSet.Add(state.UpArrow)) activeComponents.Add(state.UpArrow);
+                if (state.DownArrow != null && activeSet.Add(state.DownArrow)) activeComponents.Add(state.DownArrow);
+            }
 
             // 2. Coleta TODOS os botões que estão à direita do inventário (Lixeira, Organizar, Setas e Mods)
-            int rightEdge = slots.Max(s => s.bounds.Right) - 16;
-            
-            var rightColumn = new List<ClickableComponent>();
-            if (state.UpArrow != null) rightColumn.Add(state.UpArrow);
-            if (page.organizeButton != null) rightColumn.Add(page.organizeButton);
-            if (page.trashCan != null) rightColumn.Add(page.trashCan);
-            if (state.DownArrow != null) rightColumn.Add(state.DownArrow);
+            int maxRight = int.MinValue;
+            int inventoryBottom = int.MinValue;
+            foreach (var slot in slots)
+            {
+                if (slot.bounds.Right > maxRight)
+                    maxRight = slot.bounds.Right;
+                if (slot.bounds.Bottom > inventoryBottom)
+                    inventoryBottom = slot.bounds.Bottom;
+            }
+            int rightEdge = maxRight - 16;
 
+            var rightColumn = new List<ClickableComponent>();
+            var bottomComponents = new List<ClickableComponent>();
+
+            // Always keep arrows and organize button in rightColumn
+            if (state != null)
+            {
+                if (state.UpArrow != null) rightColumn.Add(state.UpArrow);
+                if (state.DownArrow != null) rightColumn.Add(state.DownArrow);
+            }
+            if (page.organizeButton != null) rightColumn.Add(page.organizeButton);
+
+            var rightColumnSet = new HashSet<ClickableComponent>(rightColumn);
+
+            // Now categorize the rest of activeComponents
             foreach (var c in activeComponents)
             {
-                if (c == null) continue;
-                if (rightColumn.Contains(c)) continue;
-                
-                // Se o componente estiver à direita da grade do inventário
-                if (c.bounds.Center.X > rightEdge && c.bounds.Center.X < rightEdge + 300)
+                if (c == null || rightColumnSet.Contains(c)) continue;
+                if (c.name == "charPortrait" || c == page.portrait) continue; // Portrait is not focusable, bypass it
+
+                if (c.bounds.Top >= inventoryBottom - 16)
+                {
+                    if (c == page.trashCan)
+                    {
+                        if (c.bounds.Center.Y >= inventoryBottom + 16)
+                        {
+                            bottomComponents.Add(c);
+                        }
+                        else
+                        {
+                            rightColumn.Add(c);
+                            rightColumnSet.Add(c);
+                        }
+                    }
+                    else
+                    {
+                        bottomComponents.Add(c);
+                    }
+                }
+                else if (c.bounds.Center.X > rightEdge && c.bounds.Center.X < rightEdge + 300)
                 {
                     rightColumn.Add(c);
+                    rightColumnSet.Add(c);
                 }
             }
 
@@ -295,9 +356,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             rightColumn = rightColumn.OrderBy(c => c.bounds.Center.Y).ToList();
 
             // 3. O SEGREDO: Atribuir IDs válidos aos botões de mods (que normalmente usam -1).
-            // O gamepad do Stardew ignora completamente componentes com ID -1, causando o salto para a lixeira.
             int dynamicId = 150000;
             foreach (var comp in rightColumn)
+            {
+                if (comp.myID == -1) comp.myID = dynamicId++;
+            }
+            foreach (var comp in bottomComponents)
             {
                 if (comp.myID == -1) comp.myID = dynamicId++;
             }
@@ -318,19 +382,47 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
             int upNeighbor = originalUpNeighbor != -1 ? originalUpNeighbor : 12340;
 
-            // 4. Mapeamento Vertical e Horizontal (Esquerda) Cirúrgico
+            // Pre-calcula os slots mais à direita da grade do inventário
+            var rightmostSlots = new List<ClickableComponent>();
+            for (int idx = DEFAULT_COLUMN_COUNT - 1; idx < slots.Count; idx += DEFAULT_COLUMN_COUNT)
+            {
+                rightmostSlots.Add(slots[idx]);
+            }
+
+            // Pre-calcula os slots da última linha do inventário
+            int visibleRows = slots.Count / DEFAULT_COLUMN_COUNT;
+            int lastRowStart = (visibleRows - 1) * DEFAULT_COLUMN_COUNT;
+            var lastRowSlots = new List<ClickableComponent>();
+            for (int col = 0; col < DEFAULT_COLUMN_COUNT; col++)
+            {
+                int idx = lastRowStart + col;
+                if (idx < slots.Count)
+                {
+                    lastRowSlots.Add(slots[idx]);
+                }
+            }
+
+            // 4. Mapeamento Vertical e Horizontal (Esquerda) Cirúrgico para a coluna direita
             for (int i = 0; i < rightColumn.Count; i++)
             {
                 var comp = rightColumn[i];
 
-                // Conecta a coluna inteira de cima a baixo perfeitamente, sem falhas
                 comp.upNeighborID = i > 0 ? rightColumn[i - 1].myID : upNeighbor;
                 comp.downNeighborID = i < rightColumn.Count - 1 ? rightColumn[i + 1].myID : -1;
 
-                // Aponta a vizinhança Esquerda do botão de volta para a grade do Inventário correspondente
-                var closestSlot = slots.Where((s, index) => (index + 1) % DEFAULT_COLUMN_COUNT == 0)
-                                       .OrderBy(s => Math.Abs(s.bounds.Center.Y - comp.bounds.Center.Y))
-                                       .FirstOrDefault();
+                ClickableComponent? closestSlot = null;
+                int minDistance = int.MaxValue;
+                int compY = comp.bounds.Center.Y;
+                foreach (var s in rightmostSlots)
+                {
+                    int dist = Math.Abs(s.bounds.Center.Y - compY);
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                        closestSlot = s;
+                    }
+                }
+
                 if (closestSlot != null)
                 {
                     comp.leftNeighborID = closestSlot.myID;
@@ -338,10 +430,20 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
 
             // 5. Forçar o inventário a apontar para o botão MAIS PRÓXIMO (Anular o Hardcode do Jogo)
-            for (int i = DEFAULT_COLUMN_COUNT - 1; i < slots.Count; i += DEFAULT_COLUMN_COUNT)
+            foreach (var slot in rightmostSlots)
             {
-                var slot = slots[i];
-                var closestRightComp = rightColumn.OrderBy(c => Math.Abs(c.bounds.Center.Y - slot.bounds.Center.Y)).FirstOrDefault();
+                ClickableComponent? closestRightComp = null;
+                int minDistance = int.MaxValue;
+                int slotY = slot.bounds.Center.Y;
+                foreach (var c in rightColumn)
+                {
+                    int dist = Math.Abs(c.bounds.Center.Y - slotY);
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                        closestRightComp = c;
+                    }
+                }
 
                 if (closestRightComp != null)
                 {
@@ -349,60 +451,143 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
 
-            // 6. Corrigir navegação vertical entre as linhas do inventário e os slots de equipamento
-            if (slots.Count > 24)
+            // 6. Corrigir navegação vertical entre as linhas do inventário e os componentes de baixo
+            foreach (var slot in lastRowSlots)
             {
-                int visibleRows = GetRows();
-                int columns = DEFAULT_COLUMN_COUNT;
-
-                // Salvar os vizinhos inferiores originais da terceira linha (índices 24 a 35)
-                // que apontam para equipamentos (chapéu, anéis, botas, etc.)
-                int[] originalDownNeighbors = new int[columns];
-                for (int col = 0; col < columns; col++)
+                ClickableComponent? bestDown = null;
+                int minXDiff = int.MaxValue;
+                int minY = int.MaxValue;
+                foreach (var c in bottomComponents)
                 {
-                    originalDownNeighbors[col] = slots[24 + col].downNeighborID;
-                }
-
-                // Conectar todas as linhas do inventário verticalmente de cima a baixo
-                for (int row = 0; row < visibleRows - 1; row++)
-                {
-                    for (int col = 0; col < columns; col++)
+                    int xDiff = Math.Abs(c.bounds.Center.X - slot.bounds.Center.X);
+                    if (xDiff < minXDiff || (xDiff == minXDiff && c.bounds.Y < minY))
                     {
-                        int currentIdx = (row * columns) + col;
-                        int belowIdx = currentIdx + columns;
-                        if (currentIdx < slots.Count && belowIdx < slots.Count)
+                        minXDiff = xDiff;
+                        minY = c.bounds.Y;
+                        bestDown = c;
+                    }
+                }
+                if (bestDown != null)
+                {
+                    slot.downNeighborID = bestDown.myID;
+                }
+            }
+
+            // 7. Mapeamento inteligente de vizinhos entre os componentes de baixo
+            foreach (var c in bottomComponents)
+            {
+                ClickableComponent? bestUpComp = null;
+                int minUpDist = int.MaxValue;
+                ClickableComponent? bestDownComp = null;
+                int minDownDist = int.MaxValue;
+
+                ClickableComponent? bestLeftComp = null;
+                int minLeftDist = int.MaxValue;
+                ClickableComponent? bestRightComp = null;
+                int minRightDist = int.MaxValue;
+
+                foreach (var c2 in bottomComponents)
+                {
+                    if (c2 == c) continue;
+
+                    int xDiff = c2.bounds.Center.X - c.bounds.Center.X;
+                    int yDiff = c2.bounds.Center.Y - c.bounds.Center.Y;
+                    int dist = (int)Math.Sqrt(xDiff * xDiff + yDiff * yDiff);
+
+                    bool isSameColumn = Math.Abs(xDiff) < 32;
+
+                    if (isSameColumn)
+                    {
+                        if (yDiff < 0)
                         {
-                            slots[currentIdx].downNeighborID = slots[belowIdx].myID;
-                            slots[belowIdx].upNeighborID = slots[currentIdx].myID;
+                            if (-yDiff < minUpDist)
+                            {
+                                minUpDist = -yDiff;
+                                bestUpComp = c2;
+                            }
+                        }
+                        else if (yDiff > 0)
+                        {
+                            if (yDiff < minDownDist)
+                            {
+                                minDownDist = yDiff;
+                                bestDownComp = c2;
+                            }
+                        }
+                    }
+
+                    if (xDiff < -16)
+                    {
+                        if (dist < minLeftDist)
+                        {
+                            minLeftDist = dist;
+                            bestLeftComp = c2;
+                        }
+                    }
+                    else if (xDiff > 16)
+                    {
+                        if (dist < minRightDist)
+                        {
+                            minRightDist = dist;
+                            bestRightComp = c2;
                         }
                     }
                 }
 
-                // Mapear a última linha visível (índices 72 a 83) para os vizinhos inferiores originais (equipamentos)
-                int lastRowStart = (visibleRows - 1) * columns;
-                for (int col = 0; col < columns; col++)
+                if (bestUpComp != null)
                 {
-                    int lastRowIdx = lastRowStart + col;
-                    if (lastRowIdx < slots.Count)
+                    c.upNeighborID = bestUpComp.myID;
+                }
+                else
+                {
+                    ClickableComponent? closestSlot = null;
+                    int minXDiff = int.MaxValue;
+                    foreach (var slot in lastRowSlots)
                     {
-                        slots[lastRowIdx].downNeighborID = originalDownNeighbors[col];
+                        int xDiff = Math.Abs(slot.bounds.Center.X - c.bounds.Center.X);
+                        if (xDiff < minXDiff)
+                        {
+                            minXDiff = xDiff;
+                            closestSlot = slot;
+                        }
+                    }
+                    if (closestSlot != null)
+                    {
+                        c.upNeighborID = closestSlot.myID;
                     }
                 }
 
-                // Corrigir o caminho de volta (UP) dos equipamentos para a última linha do inventário
-                foreach (var comp in activeComponents)
+                if (bestDownComp != null)
                 {
-                    if (comp == null) continue;
-                    // Se o vizinho de cima do componente for um slot da terceira linha (indices 24 a 35)
-                    if (comp.upNeighborID >= 24 && comp.upNeighborID <= 35)
+                    c.downNeighborID = bestDownComp.myID;
+                }
+
+                if (bestLeftComp != null)
+                {
+                    c.leftNeighborID = bestLeftComp.myID;
+                }
+                else
+                {
+                    ClickableComponent? closestSlot = null;
+                    int minXDiff = int.MaxValue;
+                    foreach (var slot in lastRowSlots)
                     {
-                        int col = comp.upNeighborID - 24;
-                        int lastRowIdx = lastRowStart + col;
-                        if (lastRowIdx < slots.Count)
+                        int xDiff = Math.Abs(slot.bounds.Center.X - c.bounds.Center.X);
+                        if (xDiff < minXDiff)
                         {
-                            comp.upNeighborID = slots[lastRowIdx].myID;
+                            minXDiff = xDiff;
+                            closestSlot = slot;
                         }
                     }
+                    if (closestSlot != null)
+                    {
+                        c.leftNeighborID = closestSlot.myID;
+                    }
+                }
+
+                if (bestRightComp != null)
+                {
+                    c.rightNeighborID = bestRightComp.myID;
                 }
             }
         }
@@ -644,7 +829,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
                 if (activeComponents != null)
                 {
-                    WireGamepadNavigation(page, state, activeComponents);
+                    WireGamepadNavigation(page, activeComponents);
                 }
             }
         }
@@ -771,6 +956,20 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance.GetCurrentPage() is not InventoryPage inventoryPage) return;
             if (!TryGetPageState(inventoryPage, out PageScrollState? state) || state == null) return;
 
+            // Monitorar se novos botões foram adicionados por outros mods
+            int pageCount = inventoryPage.allClickableComponents?.Count ?? 0;
+            int menuCount = __instance.allClickableComponents?.Count ?? 0;
+            int combinedHash = pageCount + (menuCount << 16);
+
+            if (combinedHash != state.LastComponentsHash)
+            {
+                state.LastComponentsHash = combinedHash;
+                if (__instance.allClickableComponents != null)
+                {
+                    WireGamepadNavigation(inventoryPage, __instance.allClickableComponents);
+                }
+            }
+
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
             float thumbY = gamePadState.ThumbSticks.Right.Y;
             int currentDirection = thumbY >= 0.5f ? -1 : thumbY <= -0.5f ? 1 : 0;
@@ -839,6 +1038,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public ClickableTextureComponent? UpArrow;
             public ClickableTextureComponent? DownArrow;
             public int LastRightStickDirection;
+            public int LastComponentsHash;
         }
 
         private sealed class ScrollableInventoryList : IList<Item>

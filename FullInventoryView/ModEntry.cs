@@ -15,7 +15,7 @@ public class ModEntry : Mod
         {
             patches.Add(new UiInfo2Patcher());
         }
-        else if (Helper.ModRegistry.IsLoaded("DazUki.UIInfoSuite2Alt"))
+        if (Helper.ModRegistry.IsLoaded("DazUki.UIInfoSuite2Alt"))
         {
             patches.Add(new UiInfo2AltPatcher());
         }
