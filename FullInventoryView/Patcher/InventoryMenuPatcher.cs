@@ -868,8 +868,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             if (organizeButton != null)
                 middleButtons.Add(organizeButton);
-            if (page.trashCan != null)
-                middleButtons.Add(page.trashCan);
 
             if (page.allClickableComponents != null)
             {
