@@ -226,16 +226,19 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         private static void GameMenuSetUpForGamePadModePostfix(GameMenu __instance)
         {
             if (__instance.GetCurrentPage() is not InventoryPage page) return;
-            if (!TryGetPageState(page, out PageScrollState? state, create: true)) return;
+            if (!TryGetPageState(page, out PageScrollState? state, create: true) || state == null) return;
 
             EnsureScrollButtons(page);
 
             // Forçamos as setas diretamente para a lista mestre do GameMenu
-            if (!__instance.allClickableComponents.Contains(state.UpArrow)) __instance.allClickableComponents.Add(state.UpArrow);
-            if (!__instance.allClickableComponents.Contains(state.DownArrow)) __instance.allClickableComponents.Add(state.DownArrow);
+            if (state.UpArrow != null && !__instance.allClickableComponents.Contains(state.UpArrow)) __instance.allClickableComponents.Add(state.UpArrow);
+            if (state.DownArrow != null && !__instance.allClickableComponents.Contains(state.DownArrow)) __instance.allClickableComponents.Add(state.DownArrow);
 
             // Aplicamos a costura tendo a lista do menu principal como base
-            WireGamepadNavigation(page, state, __instance.allClickableComponents);
+            if (__instance.allClickableComponents != null)
+            {
+                WireGamepadNavigation(page, state, __instance.allClickableComponents);
+            }
         }
 
         private static void PopulateClickableComponentListPostfix(IClickableMenu __instance)
@@ -248,15 +251,18 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPageSetUpForGamePadModePostfix(InventoryPage __instance)
         {
-            if (!TryGetPageState(__instance, out PageScrollState? state, create: true)) return;
+            if (!TryGetPageState(__instance, out PageScrollState? state, create: true) || state == null) return;
 
             EnsureScrollButtons(__instance);
-            WireGamepadNavigation(__instance, state, __instance.allClickableComponents);
+            if (__instance.allClickableComponents != null)
+            {
+                WireGamepadNavigation(__instance, state, __instance.allClickableComponents);
+            }
         }
 
         private static void WireGamepadNavigation(InventoryPage page, PageScrollState state, List<ClickableComponent> activeComponents)
         {
-            if (activeComponents == null) return;
+            if (activeComponents == null || state.UpArrow == null || state.DownArrow == null) return;
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return;
             if (InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots || slots.Count == 0) return;
 
@@ -340,6 +346,63 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 if (closestRightComp != null)
                 {
                     slot.rightNeighborID = closestRightComp.myID;
+                }
+            }
+
+            // 6. Corrigir navegação vertical entre as linhas do inventário e os slots de equipamento
+            if (slots.Count > 24)
+            {
+                int visibleRows = GetRows();
+                int columns = DEFAULT_COLUMN_COUNT;
+
+                // Salvar os vizinhos inferiores originais da terceira linha (índices 24 a 35)
+                // que apontam para equipamentos (chapéu, anéis, botas, etc.)
+                int[] originalDownNeighbors = new int[columns];
+                for (int col = 0; col < columns; col++)
+                {
+                    originalDownNeighbors[col] = slots[24 + col].downNeighborID;
+                }
+
+                // Conectar todas as linhas do inventário verticalmente de cima a baixo
+                for (int row = 0; row < visibleRows - 1; row++)
+                {
+                    for (int col = 0; col < columns; col++)
+                    {
+                        int currentIdx = (row * columns) + col;
+                        int belowIdx = currentIdx + columns;
+                        if (currentIdx < slots.Count && belowIdx < slots.Count)
+                        {
+                            slots[currentIdx].downNeighborID = slots[belowIdx].myID;
+                            slots[belowIdx].upNeighborID = slots[currentIdx].myID;
+                        }
+                    }
+                }
+
+                // Mapear a última linha visível (índices 72 a 83) para os vizinhos inferiores originais (equipamentos)
+                int lastRowStart = (visibleRows - 1) * columns;
+                for (int col = 0; col < columns; col++)
+                {
+                    int lastRowIdx = lastRowStart + col;
+                    if (lastRowIdx < slots.Count)
+                    {
+                        slots[lastRowIdx].downNeighborID = originalDownNeighbors[col];
+                    }
+                }
+
+                // Corrigir o caminho de volta (UP) dos equipamentos para a última linha do inventário
+                foreach (var comp in activeComponents)
+                {
+                    if (comp == null) continue;
+                    // Se o vizinho de cima do componente for um slot da terceira linha (indices 24 a 35)
+                    if (comp.upNeighborID >= 24 && comp.upNeighborID <= 35)
+                    {
+                        int col = comp.upNeighborID - 24;
+                        int lastRowIdx = lastRowStart + col;
+                        if (lastRowIdx < slots.Count)
+                        {
+                            comp.upNeighborID = slots[lastRowIdx].myID;
+                        }
+                    }
                 }
             }
         }
@@ -562,7 +625,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void EnsureScrollButtons(InventoryPage page)
         {
-            if (!TryGetPageState(page, out PageScrollState? state, create: true)) return;
+            if (!TryGetPageState(page, out PageScrollState? state, create: true) || state == null) return;
 
             state.UpArrow ??= CreateArrow("Scroll Up", ArrowIdUp, UpArrowSourceRect);
             state.DownArrow ??= CreateArrow("Scroll Down", ArrowIdDown, DownArrowSourceRect);
@@ -572,14 +635,17 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             AddClickableComponent(page, state.UpArrow);
             AddClickableComponent(page, state.DownArrow);
 
-            if (Game1.options.SnappyMenus)
+            if (Game1.options?.SnappyMenus ?? false)
             {
                 var activeComponents = page.allClickableComponents;
-                if (Game1.activeClickableMenu is GameMenu gameMenu)
+                if (Game1.activeClickableMenu is GameMenu gameMenu && gameMenu.allClickableComponents != null)
                 {
                     activeComponents = gameMenu.allClickableComponents;
                 }
-                WireGamepadNavigation(page, state, activeComponents);
+                if (activeComponents != null)
+                {
+                    WireGamepadNavigation(page, state, activeComponents);
+                }
             }
         }
 
@@ -596,6 +662,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return;
             if (InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots || slots.Count == 0) return;
             if (InventoryPageOrganizeButtonField.GetValue(page) is not ClickableTextureComponent organizeButton) return;
+            if (state.UpArrow == null || state.DownArrow == null) return;
 
             ClickableComponent firstSlot = slots[0];
             int bottomSlotIndex = Math.Min(slots.Count - 1, (MAX_ROW_COUNT - 1) * DEFAULT_COLUMN_COUNT);
@@ -625,7 +692,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPageDrawPostfix(InventoryPage __instance, SpriteBatch b)
         {
-            if (!TryGetPageState(__instance, out PageScrollState? state)) return;
+            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return;
+            if (state.UpArrow == null || state.DownArrow == null) return;
 
             float upAlpha = CanScroll(__instance, -1) ? 1f : 0.35f;
             float downAlpha = CanScroll(__instance, 1) ? 1f : 0.35f;
@@ -636,7 +704,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static bool InventoryPageReceiveLeftClickPrefix(InventoryPage __instance, int x, int y, bool playSound)
         {
-            if (!TryGetPageState(__instance, out PageScrollState? state)) return true;
+            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return true;
+            if (state.UpArrow == null || state.DownArrow == null) return true;
 
             if (state.UpArrow.containsPoint(x, y))
             {
@@ -654,7 +723,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         private static bool InventoryPageReceiveGamePadButtonPrefix(InventoryPage __instance, Buttons button)
         {
             if (button != Buttons.A) return true;
-            if (!TryGetPageState(__instance, out PageScrollState? state)) return true;
+            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return true;
+            if (state.UpArrow == null || state.DownArrow == null) return true;
 
             ClickableComponent snapped = __instance.currentlySnappedComponent;
             if (snapped == null) return true;
@@ -674,7 +744,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPagePerformHoverActionPostfix(InventoryPage __instance, int x, int y)
         {
-            if (!TryGetPageState(__instance, out PageScrollState? state)) return;
+            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return;
+            if (state.UpArrow == null || state.DownArrow == null) return;
 
             bool canScrollUp = CanScroll(__instance, -1);
             bool canScrollDown = CanScroll(__instance, 1);
@@ -698,7 +769,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         private static void GameMenuUpdatePostfix(GameMenu __instance, GameTime time)
         {
             if (__instance.GetCurrentPage() is not InventoryPage inventoryPage) return;
-            if (!TryGetPageState(inventoryPage, out PageScrollState? state)) return;
+            if (!TryGetPageState(inventoryPage, out PageScrollState? state) || state == null) return;
 
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
             float thumbY = gamePadState.ThumbSticks.Right.Y;
@@ -719,7 +790,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (ActualInventoryField.GetValue(inventoryMenu) is not IList<Item> actualInventory) return false;
 
             IList<Item> fullInventory = actualInventory is ScrollableInventoryList scrollable ? scrollable.Underlying : actualInventory;
-            if (fullInventory != Game1.player.Items || GetTotalRows(fullInventory) <= MAX_ROW_COUNT) return false;
+            if (fullInventory != (Game1.player?.Items) || GetTotalRows(fullInventory) <= MAX_ROW_COUNT) return false;
 
             state = create ? PageStates.GetOrCreateValue(page) : PageStates.TryGetValue(page, out var existing) ? existing : null;
             return state is not null;
@@ -730,7 +801,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return false;
 
             var state = InventoryStates.GetOrCreateValue(inventoryMenu);
-            IList<Item> fullInventory = state.FullInventory ?? (ActualInventoryField.GetValue(inventoryMenu) as IList<Item>) ?? Game1.player.Items;
+            IList<Item> fullInventory = state.FullInventory ?? (ActualInventoryField.GetValue(inventoryMenu) as IList<Item>) ?? ((IList<Item>?)Game1.player?.Items) ?? Array.Empty<Item>();
 
             int totalRows = GetTotalRows(fullInventory);
             int maxScrollRow = Math.Max(0, totalRows - MAX_ROW_COUNT);
@@ -743,7 +814,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu) return;
 
             var state = InventoryStates.GetOrCreateValue(inventoryMenu);
-            IList<Item> fullInventory = state.FullInventory ?? (ActualInventoryField.GetValue(inventoryMenu) as IList<Item>) ?? Game1.player.Items;
+            IList<Item> fullInventory = state.FullInventory ?? (ActualInventoryField.GetValue(inventoryMenu) as IList<Item>) ?? ((IList<Item>?)Game1.player?.Items) ?? Array.Empty<Item>();
 
             int totalRows = GetTotalRows(fullInventory);
             int maxScrollRow = Math.Max(0, totalRows - MAX_ROW_COUNT);
