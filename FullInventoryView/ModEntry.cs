@@ -7,8 +7,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView;
 
 public class ModEntry : Mod
 {
+    public static ModEntry Instance { get; private set; } = null!;
+
     public override void Entry(IModHelper helper)
     {
+        Instance = this;
         Log.Init(Monitor);
         var patches = new List<IPatcher> { new InventoryMenuPatcher() };
         if (Helper.ModRegistry.IsLoaded("Annosz.UiInfoSuite2"))

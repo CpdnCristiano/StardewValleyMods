@@ -770,7 +770,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryMenuMethodPrefix(InventoryMenu __instance)
         {
-            if (Game1.player?.maxItems.Value <= DEFAULT_MAX_ITEMS) return;
+            if (Game1.player == null || Game1.player.maxItems.Value <= DEFAULT_MAX_ITEMS) return;
 
             if (ActualInventoryField.GetValue(__instance) is not IList<Item> currentInventory) return;
             if (currentInventory is ScrollableInventoryList)
@@ -908,11 +908,25 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         private static bool InventoryPageReceiveGamePadButtonPrefix(InventoryPage __instance, Buttons button)
         {
             if (button != Buttons.A) return true;
-            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return true;
-            if (state.UpArrow == null || state.DownArrow == null) return true;
 
             ClickableComponent snapped = __instance.currentlySnappedComponent;
             if (snapped == null) return true;
+
+            if (snapped.myID == 77770) // Calendar snap
+            {
+                Game1.activeClickableMenu = new Billboard(false);
+                Game1.playSound("bigSelect");
+                return false;
+            }
+            if (snapped.myID == 77771) // Quest/Billboard snap
+            {
+                Game1.activeClickableMenu = new Billboard(true);
+                Game1.playSound("bigSelect");
+                return false;
+            }
+
+            if (!TryGetPageState(__instance, out PageScrollState? state) || state == null) return true;
+            if (state.UpArrow == null || state.DownArrow == null) return true;
 
             if (snapped.myID == ArrowIdUp)
             {
