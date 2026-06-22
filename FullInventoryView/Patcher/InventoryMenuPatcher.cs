@@ -426,7 +426,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             {
                 var comp = rightColumn[i];
 
-                comp.upNeighborID = i > 0 ? rightColumn[i - 1].myID : upNeighbor;
+                comp.upNeighborID = i > 0 ? rightColumn[i - 1].myID : -1;
                 comp.downNeighborID = i < rightColumn.Count - 1 ? rightColumn[i + 1].myID : -1;
 
                 ClickableComponent? closestSlot = null;
@@ -792,9 +792,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (Game1.player == null || Game1.player.maxItems.Value <= DEFAULT_MAX_ITEMS) return;
 
             if (ActualInventoryField.GetValue(__instance) is not IList<Item> currentInventory) return;
-            if (currentInventory is ScrollableInventoryList)
+            if (currentInventory is ScrollableInventoryList scrollList)
             {
-                InventoryStates.GetOrCreateValue(__instance).Depth++;
+                var s = InventoryStates.GetOrCreateValue(__instance);
+                s.Depth++;
+                if (s.OriginalMaxItems == null)
+                {
+                    s.OriginalMaxItems = Game1.player.maxItems.Value;
+                }
+                Game1.player.maxItems.Value = scrollList.Count;
                 return;
             }
             if (currentInventory != Game1.player.Items) return;
@@ -810,7 +816,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (totalRows <= MAX_ROW_COUNT) return;
 
             state.OriginalInventory = currentInventory;
-            ActualInventoryField.SetValue(__instance, new ScrollableInventoryList(currentInventory, state.ScrollRow * DEFAULT_COLUMN_COUNT, GetCapacity()));
+            var scrollableList = new ScrollableInventoryList(currentInventory, state.ScrollRow * DEFAULT_COLUMN_COUNT, GetCapacity());
+            ActualInventoryField.SetValue(__instance, scrollableList);
+
+            if (state.OriginalMaxItems == null)
+            {
+                state.OriginalMaxItems = Game1.player.maxItems.Value;
+            }
+            Game1.player.maxItems.Value = scrollableList.Count;
         }
 
         private static void InventoryMenuMethodPostfix(InventoryMenu __instance)
@@ -819,6 +832,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             state.Depth--;
             if (state.Depth > 0) return;
+
+            if (state.OriginalMaxItems != null)
+            {
+                Game1.player.maxItems.Value = state.OriginalMaxItems.Value;
+                state.OriginalMaxItems = null;
+            }
 
             if (state.OriginalInventory is not null)
             {
@@ -949,8 +968,21 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
 
-            // Sort middleButtons based on their cached original Y offset
+            // Remove organizeButton from the list to sort the rest
+            if (organizeButton != null)
+            {
+                middleButtons.Remove(organizeButton);
+            }
+
+            // Sort the rest of the buttons based on their cached original Y offset
             middleButtons = middleButtons.OrderBy(b => state.OriginalY[b]).ToList();
+
+            // Insert organizeButton exactly in the middle of the sorted list to keep it centered
+            if (organizeButton != null)
+            {
+                int middleIndex = middleButtons.Count / 2;
+                middleButtons.Insert(middleIndex, organizeButton);
+            }
 
             // Layout the middle buttons vertically between UpArrow.bounds.Bottom and DownArrow.bounds.Top
             int startY = state.UpArrow.bounds.Bottom + 16;
@@ -1149,6 +1181,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public int Depth;
             public IList<Item>? FullInventory;
             public IList<Item>? OriginalInventory;
+            public int? OriginalMaxItems;
         }
 
         private sealed class PageScrollState
