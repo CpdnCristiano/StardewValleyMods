@@ -292,9 +292,12 @@ typeof(bool) }
                 postfix: this.GetHarmonyMethod(nameof(PopulateClickableComponentListPostfix), (int)Priority.Last)
             );
 
-            harmony.Patch(
-                original: this.RequireMethod<InventoryPage>(nameof(InventoryPage.receiveGamePadButton)),
-                prefix: this.GetHarmonyMethod(nameof(InventoryPageReceiveGamePadButtonPrefix))
+            SafePatchMethod(
+                harmony,
+                typeof(InventoryPage),
+                nameof(InventoryPage.receiveGamePadButton),
+                new Type[] { typeof(Buttons) },
+                prefixName: nameof(InventoryPageReceiveGamePadButtonPrefix)
             );
 
             // Universal Gamepad Snap Scroll Navigation Patches
@@ -965,6 +968,8 @@ typeof(bool) }
 
             var chestColumnButtons = FindChestColumnButtons(
                 menu,
+                anchorBtn,
+                xTolerance,
                 chestSlots,
                 playerSlots,
                 pickerToggle,
@@ -988,6 +993,11 @@ typeof(bool) }
                 if (fillBtn != null && fillBtn != colorBtn) chestTopColumn.Add(fillBtn);
                 if (organizeBtn != null && organizeBtn != colorBtn && organizeBtn != fillBtn) chestTopColumn.Add(organizeBtn);
             }
+
+            bool shouldMoveOkButton = okBtn != null
+                && (ReferenceEquals(okBtn, anchorBtn) || Math.Abs(okBtn.bounds.Center.X - anchorCenterX) <= xTolerance);
+            bool shouldMoveTrashButton = trashBtn != null
+                && (ReferenceEquals(trashBtn, anchorBtn) || Math.Abs(trashBtn.bounds.Center.X - anchorCenterX) <= xTolerance);
 
             int layoutHash = ComputeChestLayoutHash(
                 anchorCenterX,
@@ -1044,14 +1054,14 @@ typeof(bool) }
             playerGrid.DownArrow.bounds.X = anchorCenterX - (playerGrid.DownArrow.bounds.Width / 2);
             playerGrid.DownArrow.bounds.Y = playerLastRowY;
 
-            if (okBtn != null)
+            if (shouldMoveOkButton && okBtn != null)
             {
                 okBtn.bounds.X = anchorCenterX - (okBtn.bounds.Width / 2);
                 okBtn.bounds.Y = playerGrid.DownArrow.bounds.Y - 8 - okBtn.bounds.Height;
             }
-            if (trashBtn != null)
+            if (shouldMoveTrashButton && trashBtn != null)
             {
-                int trashBaseY = okBtn != null ? okBtn.bounds.Y : playerGrid.DownArrow.bounds.Y;
+                int trashBaseY = shouldMoveOkButton && okBtn != null ? okBtn.bounds.Y : playerGrid.DownArrow.bounds.Y;
                 trashBtn.bounds.X = anchorCenterX - (trashBtn.bounds.Width / 2);
                 trashBtn.bounds.Y = trashBaseY - 8 - trashBtn.bounds.Height;
             }
@@ -1063,8 +1073,8 @@ typeof(bool) }
 
             var allSideButtons = new List<ClickableComponent>();
             allSideButtons.AddRange(chestTopColumn);
-            if (trashBtn != null) allSideButtons.Add(trashBtn);
-            if (okBtn != null) allSideButtons.Add(okBtn);
+            if (shouldMoveTrashButton && trashBtn != null) allSideButtons.Add(trashBtn);
+            if (shouldMoveOkButton && okBtn != null) allSideButtons.Add(okBtn);
             allSideButtons.Add(playerGrid.UpArrow);
             allSideButtons.Add(playerGrid.DownArrow);
             allSideButtons = allSideButtons.Distinct().OrderBy(c => c.bounds.Y).ToList();
@@ -1216,6 +1226,8 @@ typeof(bool) }
 
         private static List<ClickableComponent> FindChestColumnButtons(
             IClickableMenu menu,
+            ClickableComponent anchorBtn,
+            int xTolerance,
             List<ClickableComponent> chestSlots,
             List<ClickableComponent> playerSlots,
             ClickableComponent? excludedButton,
@@ -1228,7 +1240,7 @@ typeof(bool) }
             var buttons = new List<ClickableComponent>();
             if (menu.allClickableComponents == null) return buttons;
 
-            int chestRightEdge = chestSlots.Max(s => s.bounds.Right) - 16;
+            int anchorCenterX = anchorBtn.bounds.Center.X;
             int fullMinY = Math.Min(chestSlots.Min(s => s.bounds.Top), playerSlots.Min(s => s.bounds.Top)) - 16;
             int fullMaxY = Math.Max(chestSlots.Max(s => s.bounds.Bottom), playerSlots.Max(s => s.bounds.Bottom)) + 16;
 
@@ -1238,14 +1250,15 @@ typeof(bool) }
                     continue;
 
                 string reason = "accepted";
+                int dx = component.bounds.Center.X - anchorCenterX;
                 if (component == excludedButton || component == upArrow || component == downArrow || component == okBtn || component == trashBtn)
                     reason = "excluded-known";
                 else if (component == menu.upperRightCloseButton || component.name == "upperRightCloseButton")
                     reason = "excluded-system";
                 else if (chestSlots.Contains(component) || playerSlots.Contains(component))
                     reason = "excluded-slot";
-                else if (component.bounds.Center.X <= chestRightEdge || component.bounds.Center.X >= chestRightEdge + 300)
-                    reason = $"excluded-x:{component.bounds.Center.X}";
+                else if (Math.Abs(dx) > xTolerance)
+                    reason = $"excluded-dx:{dx}";
                 else if (component.bounds.Center.Y < fullMinY || component.bounds.Center.Y > fullMaxY)
                     reason = $"excluded-y:{component.bounds.Center.Y}";
 
