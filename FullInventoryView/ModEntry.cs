@@ -26,7 +26,11 @@ public class ModEntry : Mod
         HarmonyPatcher.Apply(this, patches.ToArray());
         helper.Events.Display.MenuChanged += this.OnMenuChanged;
 
-        helper.ConsoleCommands.Add("fit_size", "Altera o tamanho máximo do inventário do jogador. Exemplo: fit_size 60", this.SetInventorySize);
+        helper.ConsoleCommands.Add(
+            "fit_size",
+            "Altera o tamanho máximo do inventário do jogador. Exemplo: fit_size 60",
+            this.SetInventorySize
+        );
     }
 
     private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
@@ -36,7 +40,9 @@ public class ModEntry : Mod
 
         string typeChain = DescribeTypeChain(e.NewMenu.GetType());
         string interfaces = DescribeInterfaces(e.NewMenu.GetType());
-        Log.Debug($"[MenuProbe] opened={e.NewMenu.GetType().FullName} inheritance={typeChain} interfaces={interfaces}");
+        Log.Debug(
+            $"[MenuProbe] opened={e.NewMenu.GetType().FullName} inheritance={typeChain} interfaces={interfaces}"
+        );
     }
 
     private static string DescribeTypeChain(Type type)
@@ -54,11 +60,7 @@ public class ModEntry : Mod
 
     private static string DescribeInterfaces(Type type)
     {
-        var names = type
-            .GetInterfaces()
-            .Select(p => p.FullName ?? p.Name)
-            .OrderBy(p => p)
-            .ToList();
+        var names = type.GetInterfaces().Select(p => p.FullName ?? p.Name).OrderBy(p => p).ToList();
 
         return names.Count > 0 ? string.Join(", ", names) : "<none>";
     }
@@ -67,7 +69,10 @@ public class ModEntry : Mod
     {
         if (StardewValley.Game1.player == null)
         {
-            this.Monitor.Log("Nenhum save carregado! Carregue um save antes de rodar o comando.", LogLevel.Error);
+            this.Monitor.Log(
+                "Nenhum save carregado! Carregue um save antes de rodar o comando.",
+                LogLevel.Error
+            );
             return;
         }
 
@@ -78,6 +83,9 @@ public class ModEntry : Mod
         }
 
         StardewValley.Game1.player.maxItems.Value = size;
-        this.Monitor.Log($"Inventário alterado com sucesso para {size} slots ({size / 12} linhas)!", LogLevel.Info);
+        this.Monitor.Log(
+            $"Inventário alterado com sucesso para {size} slots ({size / 12} linhas)!",
+            LogLevel.Info
+        );
     }
 }

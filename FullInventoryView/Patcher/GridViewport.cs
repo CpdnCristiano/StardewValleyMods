@@ -50,12 +50,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public void LayoutArrows()
         {
-            if (this.CustomArrowLayout) return;
+            if (this.CustomArrowLayout)
+                return;
             var slots = this.Menu.inventory;
-            if (slots == null || slots.Count == 0) return;
+            if (slots == null || slots.Count == 0)
+                return;
 
             int columns = this.Menu.capacity / this.Menu.rows;
-            if (columns <= 0) columns = 12;
+            if (columns <= 0)
+                columns = 12;
 
             int lastColIndex = columns - 1;
             int bottomIndex = (this.Menu.rows - 1) * columns;
@@ -67,29 +70,45 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (Game1.activeClickableMenu != null)
             {
                 var menuType = Game1.activeClickableMenu.GetType();
-                var orgField = menuType.GetField("organizeButton", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var orgField = menuType.GetField(
+                    "organizeButton",
+                    System.Reflection.BindingFlags.Public
+                        | System.Reflection.BindingFlags.NonPublic
+                        | System.Reflection.BindingFlags.Instance
+                );
                 if (orgField != null)
                 {
-                    organizeButton = orgField.GetValue(Game1.activeClickableMenu) as ClickableTextureComponent;
+                    organizeButton =
+                        orgField.GetValue(Game1.activeClickableMenu) as ClickableTextureComponent;
                 }
-                else if (Game1.activeClickableMenu is GameMenu gameMenu && gameMenu.GetCurrentPage() is InventoryPage page)
+                else if (
+                    Game1.activeClickableMenu is GameMenu gameMenu
+                    && gameMenu.GetCurrentPage() is InventoryPage page
+                )
                 {
                     organizeButton = page.organizeButton;
                 }
             }
 
-            int targetX = organizeButton != null
-                ? organizeButton.bounds.Center.X - (this.UpArrow.bounds.Width / 2)
-                : topAnchor.bounds.Right + 24;
+            int targetX =
+                organizeButton != null
+                    ? organizeButton.bounds.Center.X - (this.UpArrow.bounds.Width / 2)
+                    : topAnchor.bounds.Right + 24;
 
-            this.UpArrow.bounds = new Rectangle(targetX, topAnchor.bounds.Y, 44, 48);
-            this.DownArrow.bounds = new Rectangle(targetX, bottomAnchor.bounds.Y + bottomAnchor.bounds.Height - 48, 44, 48);
+            this.UpArrow.bounds = new Rectangle(targetX, topAnchor.bounds.Top, 44, 48);
+            this.DownArrow.bounds = new Rectangle(
+                targetX,
+                bottomAnchor.bounds.Bottom,
+                44,
+                48
+            );
         }
 
         public int GetTotalRows(IList<Item> items)
         {
             int columns = this.Menu.capacity / this.Menu.rows;
-            if (columns <= 0) columns = 12;
+            if (columns <= 0)
+                columns = 12;
             return Math.Max(0, (items.Count + columns - 1) / columns);
         }
 
@@ -113,7 +132,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public void Draw(SpriteBatch b, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity) return;
+            if (items == null || items.Count <= this.Menu.capacity)
+                return;
 
             this.LayoutArrows();
 
@@ -126,7 +146,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public void PerformHoverAction(int x, int y, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity) return;
+            if (items == null || items.Count <= this.Menu.capacity)
+                return;
 
             bool canScrollUp = this.CanScroll(items, -1);
             bool canScrollDown = this.CanScroll(items, 1);
@@ -137,7 +158,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public bool ReceiveLeftClick(int x, int y, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity) return false;
+            if (items == null || items.Count <= this.Menu.capacity)
+                return false;
 
             if (this.UpArrow.containsPoint(x, y))
             {
@@ -160,9 +182,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public bool ReceiveScrollWheelAction(int direction, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity) return false;
+            if (items == null || items.Count <= this.Menu.capacity)
+                return false;
 
-            int delta = direction > 0 ? -1 : direction < 0 ? 1 : 0;
+            int delta =
+                direction > 0 ? -1
+                : direction < 0 ? 1
+                : 0;
             if (delta != 0 && this.CanScroll(items, delta))
             {
                 this.Scroll(items, delta);
@@ -173,11 +199,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public void UpdateGamepad(IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity) return;
+            if (items == null || items.Count <= this.Menu.capacity)
+                return;
 
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
             float thumbY = gamePadState.ThumbSticks.Right.Y;
-            int currentDirection = thumbY >= 0.5f ? -1 : thumbY <= -0.5f ? 1 : 0;
+            int currentDirection =
+                thumbY >= 0.5f ? -1
+                : thumbY <= -0.5f ? 1
+                : 0;
 
             if (currentDirection != 0 && currentDirection != this.LastRightStickDirection)
             {
