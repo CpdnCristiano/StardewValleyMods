@@ -86,6 +86,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             typeof(DiscreteColorPicker),
             "colorPickerToggleButton"
         );
+        private static readonly FieldInfo ShopMenuScrollBarRunnerField = AccessTools.Field(
+            typeof(ShopMenu),
+            "scrollBarRunner"
+        );
+        private static readonly MethodInfo? ShopMenuSetScrollBarToCurrentIndexMethod =
+            AccessTools.Method(typeof(ShopMenu), "setScrollBarToCurrentIndex");
 
         private static readonly Rectangle UpArrowSourceRect = new(421, 459, 11, 12);
         private static readonly Rectangle DownArrowSourceRect = new(421, 472, 11, 12);
@@ -1119,6 +1125,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (menu == null)
                 return;
+            if (menu is ShopMenu shopMenu)
+            {
+                AdjustShopMenuScrollLayout(shopMenu);
+            }
 
             var menus = FindInventoryMenus(menu);
             if (menus.Count == 0)
@@ -1222,6 +1232,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var colorPicker = fields.ColorPicker;
             var preferredSide = GetPreferredSide(menu);
             int preferredSideOffsetPixels = GetPreferredSideOffsetPixels(menu);
+            int? arrowAnchorCenterXOverride = GetArrowAnchorCenterXOverride(menu);
+            var arrowAnchorComponentOverride = GetArrowAnchorComponentOverride(menu);
             int anchorCenterX =
                 (okBtn ?? trashBtn ?? organizeBtn ?? fillBtn ?? colorBtn)?.bounds.Center.X ?? 0;
             int layoutHash = ComputeChestLayoutHash(
@@ -1249,6 +1261,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     PlayerColumns = playerColumns,
                     PreferredSide = preferredSide,
                     PreferredSideOffsetPixels = preferredSideOffsetPixels,
+                    ArrowAnchorCenterXOverride = arrowAnchorCenterXOverride,
+                    ArrowAnchorComponentOverride = arrowAnchorComponentOverride,
                     CenterOkBetweenArrows =
                         menu is MuseumMenu
                         || CurrentParentMenu is MuseumMenu
@@ -1284,6 +1298,97 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
 
             return 28;
+        }
+
+        private static int? GetArrowAnchorCenterXOverride(IClickableMenu menu)
+        {
+            if (menu is ShopMenu shopMenu)
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        private static ClickableComponent? GetArrowAnchorComponentOverride(IClickableMenu menu)
+        {
+            if (menu is ShopMenu shopMenu)
+            {
+                return shopMenu.upArrow ?? shopMenu.downArrow;
+            }
+
+            return null;
+        }
+
+        private static void AdjustShopMenuScrollLayout(ShopMenu menu)
+        {
+            if (menu?.upArrow == null || menu.downArrow == null || menu.scrollBar == null)
+                return;
+            if (menu.forSaleButtons == null || menu.forSaleButtons.Count == 0)
+                return;
+            if (ShopMenuScrollBarRunnerField == null || ShopMenuSetScrollBarToCurrentIndexMethod == null)
+                return;
+
+            var firstSaleButton = menu.forSaleButtons[0];
+            var lastSaleButton = menu.forSaleButtons[menu.forSaleButtons.Count - 1];
+            int arrowX = menu.upArrow.bounds.X;
+            int upY = firstSaleButton.bounds.Top;
+            int downY = lastSaleButton.bounds.Bottom - menu.downArrow.bounds.Height;
+
+            menu.upArrow.bounds = new Rectangle(
+                arrowX,
+                upY,
+                menu.upArrow.bounds.Width,
+                menu.upArrow.bounds.Height
+            );
+            menu.downArrow.bounds = new Rectangle(
+                arrowX,
+                downY,
+                menu.downArrow.bounds.Width,
+                menu.downArrow.bounds.Height
+            );
+
+            int runnerX = menu.upArrow.bounds.X + 12;
+            int runnerY = menu.upArrow.bounds.Bottom + 4;
+            int runnerHeight = Math.Max(8, menu.downArrow.bounds.Y - runnerY - 8);
+
+            menu.scrollBar.bounds = new Rectangle(
+                runnerX,
+                menu.scrollBar.bounds.Y,
+                menu.scrollBar.bounds.Width,
+                menu.scrollBar.bounds.Height
+            );
+
+            ShopMenuScrollBarRunnerField.SetValue(
+                menu,
+                new Rectangle(runnerX, runnerY, menu.scrollBar.bounds.Width, runnerHeight)
+            );
+            SetShopScrollBarToCurrentIndex(menu, runnerY, downY);
+        }
+
+        private static void SetShopScrollBarToCurrentIndex(ShopMenu menu, int runnerY, int downArrowY)
+        {
+            int maxIndex = Math.Max(0, menu.forSale.Count - 4);
+            int minY = runnerY;
+            int maxY = Math.Max(minY, downArrowY - menu.scrollBar.bounds.Height - 4);
+
+            int targetY;
+            if (maxIndex <= 0)
+            {
+                targetY = minY;
+            }
+            else
+            {
+                float progress = menu.currentItemIndex / (float)maxIndex;
+                targetY = minY + (int)Math.Round((maxY - minY) * progress);
+            }
+
+            menu.scrollBar.bounds = new Rectangle(
+                menu.scrollBar.bounds.X,
+                targetY,
+                menu.scrollBar.bounds.Width,
+                menu.scrollBar.bounds.Height
+            );
         }
 
         private static ClickableComponent? FindFieldContaining(object obj, string substring)
@@ -1427,6 +1532,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void ShopMenuDrawPrefix(ShopMenu __instance, SpriteBatch b)
         {
+            AdjustShopMenuScrollLayout(__instance);
             RepositionAndWireSideButtons(__instance);
         }
 
@@ -1442,6 +1548,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 int extraHeight = GetExtraHeight();
                 __instance.yPositionOnScreen -= extraHeight / 2;
             }
+
+            AdjustShopMenuScrollLayout(__instance);
         }
 
         static bool isWithinBoundsPrefix(
@@ -1770,7 +1878,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (GridViewports.TryGetValue(inventoryMenu, out var grid) && grid != null)
             {
                 IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
-                if (items != null && grid.ReceiveScrollWheelAction(direction, items))
+                if (
+                    items != null
+                    && IsMouseTargetingInventoryArea(
+                        inventoryMenu,
+                        grid,
+                        Game1.getOldMouseX(),
+                        Game1.getOldMouseY()
+                    )
+                    && grid.ReceiveScrollWheelAction(direction, items)
+                )
                 {
                     return false;
                 }
@@ -1807,7 +1924,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (GridViewports.TryGetValue(inventoryMenu, out var viewport) && viewport != null)
             {
                 IList<Item>? items = viewport.OriginalInventory ?? viewport.FullInventory;
-                if (items != null)
+                if (items != null && IsGamepadTargetingInventoryArea(__instance, inventoryMenu, viewport))
                 {
                     viewport.UpdateGamepad(items);
                 }
@@ -1838,7 +1955,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var menus = FindInventoryMenus(__instance);
             foreach (var menu in menus)
             {
-                if (menu.isWithinBounds(Game1.getOldMouseX(), Game1.getOldMouseY()))
+                if (
+                    IsMouseTargetingInventoryArea(
+                        menu,
+                        GridViewports.TryGetValue(menu, out GridViewport? g) ? g : null,
+                        Game1.getOldMouseX(),
+                        Game1.getOldMouseY()
+                    )
+                )
                 {
                     if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                     {
@@ -1888,12 +2012,68 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                 {
                     IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
-                    if (items != null)
+                    if (items != null && IsGamepadTargetingInventoryArea(__instance, menu, grid))
                     {
                         grid.UpdateGamepad(items);
                     }
                 }
             }
+        }
+
+        private static bool IsMouseTargetingInventoryArea(
+            InventoryMenu menu,
+            GridViewport? grid,
+            int mouseX,
+            int mouseY
+        )
+        {
+            if (menu.inventory != null)
+            {
+                foreach (var slot in menu.inventory)
+                {
+                    if (slot?.containsPoint(mouseX, mouseY) == true)
+                        return true;
+                }
+            }
+
+            if (grid != null)
+            {
+                if (grid.UpArrow.containsPoint(mouseX, mouseY))
+                    return true;
+                if (grid.DownArrow.containsPoint(mouseX, mouseY))
+                    return true;
+                if (grid.ShowAuxScrollBar)
+                {
+                    if (grid.ScrollBarThumb.containsPoint(mouseX, mouseY))
+                        return true;
+                    if (grid.ScrollBarRunner.Contains(mouseX, mouseY))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsGamepadTargetingInventoryArea(
+            IClickableMenu parentMenu,
+            InventoryMenu inventoryMenu,
+            GridViewport grid
+        )
+        {
+            var snapped = parentMenu.currentlySnappedComponent;
+            if (snapped == null)
+                return false;
+
+            if (inventoryMenu.inventory != null && inventoryMenu.inventory.Contains(snapped))
+                return true;
+
+            if (ReferenceEquals(snapped, grid.UpArrow) || ReferenceEquals(snapped, grid.DownArrow))
+                return true;
+
+            if (grid.ShowAuxScrollBar && ReferenceEquals(snapped, grid.ScrollBarThumb))
+                return true;
+
+            return false;
         }
 
         private static List<InventoryMenu> FindInventoryMenus(IClickableMenu menu)

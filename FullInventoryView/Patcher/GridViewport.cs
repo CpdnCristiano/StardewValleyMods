@@ -22,6 +22,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public ClickableTextureComponent UpArrow { get; private set; }
         public ClickableTextureComponent DownArrow { get; private set; }
+        public ClickableTextureComponent ScrollBarThumb { get; private set; }
+        public Rectangle ScrollBarRunner { get; private set; }
+        public bool ShowAuxScrollBar { get; private set; } = false;
+        public bool IsDraggingAuxScrollBar { get; private set; } = false;
+        public int AuxScrollDragOffset { get; private set; } = 0;
 
         public int LastRightStickDirection { get; set; } = 0;
         public int LastPageComponentsHash { get; set; } = int.MinValue;
@@ -54,6 +59,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 new Rectangle(421, 472, 11, 12),
                 4f
             );
+            this.ScrollBarThumb = new ClickableTextureComponent(
+                "Scroll Thumb",
+                new Rectangle(0, 0, 24, 40),
+                null,
+                "Scroll Thumb",
+                Game1.mouseCursors,
+                new Rectangle(435, 463, 6, 10),
+                4f
+            );
+            this.ScrollBarRunner = Rectangle.Empty;
         }
 
         public bool CustomArrowLayout { get; set; } = false;
@@ -67,6 +82,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public int PlayerColumns { get; init; }
             public SideLayoutPreference PreferredSide { get; init; } = SideLayoutPreference.Right;
             public int PreferredSideOffsetPixels { get; init; } = 28;
+            public int? ArrowAnchorCenterXOverride { get; init; }
+            public ClickableComponent? ArrowAnchorComponentOverride { get; init; }
             public bool CenterOkBetweenArrows { get; init; }
             public ClickableComponent? ColorButton { get; init; }
             public ClickableComponent? FillButton { get; init; }
@@ -260,9 +277,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             if (sideAnchorBtn == null)
             {
-                int targetX = preferLeftSide
-                    ? context.PlayerSlots[0].bounds.Left - preferredOffset - this.UpArrow.bounds.Width
-                    : context.PlayerSlots[context.PlayerColumns - 1].bounds.Right + preferredOffset;
+                int targetX;
+                if (context.ArrowAnchorComponentOverride != null)
+                {
+                    targetX =
+                        context.ArrowAnchorComponentOverride.bounds.Center.X
+                        - (this.UpArrow.bounds.Width / 2);
+                }
+                else if (context.ArrowAnchorCenterXOverride.HasValue)
+                {
+                    targetX = context.ArrowAnchorCenterXOverride.Value - (this.UpArrow.bounds.Width / 2);
+                }
+                else
+                {
+                    targetX = preferLeftSide
+                        ? context.PlayerSlots[0].bounds.Left - preferredOffset - this.UpArrow.bounds.Width
+                        : context.PlayerSlots[context.PlayerColumns - 1].bounds.Right + preferredOffset;
+                }
                 this.UpArrow.bounds.X = targetX;
                 this.UpArrow.bounds.Y = context.PlayerSlots[0].bounds.Top;
                 this.DownArrow.bounds.X = targetX;
@@ -342,6 +373,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             int arrowCenterX = preferLeftSide
                 ? context.PlayerSlots[0].bounds.Left - preferredOffset - (this.UpArrow.bounds.Width / 2)
                 : sideAnchorCenterX;
+            if (context.ArrowAnchorComponentOverride != null)
+            {
+                arrowCenterX = context.ArrowAnchorComponentOverride.bounds.Center.X;
+            }
+            if (context.ArrowAnchorCenterXOverride.HasValue)
+            {
+                arrowCenterX = context.ArrowAnchorCenterXOverride.Value;
+            }
 
             var chestTopColumn = FindChestColumnButtons(
                 context.Menu,
@@ -387,7 +426,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             this.UpArrow.bounds.Y = context.PlayerSlots[0].bounds.Top;
             this.DownArrow.bounds.X = arrowCenterX - (this.DownArrow.bounds.Width / 2);
             this.DownArrow.bounds.Y =
-                context.PlayerSlots[playerLastRowIndex].bounds.Bottom - this.DownArrow.bounds.Height;
+                context.PlayerSlots[playerLastRowIndex].bounds.Bottom
+                - this.DownArrow.bounds.Height;
 
             if (okBtn != null)
             {
@@ -432,33 +472,125 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     context.Menu.allClickableComponents.Add(comp);
             }
 
-            var slotColumnForArrows = new List<ClickableComponent>();
+            var leftSlotColumn = new List<ClickableComponent>();
+            for (int idx = 0; idx < context.ChestSlots.Count; idx += context.ChestColumns)
+                leftSlotColumn.Add(context.ChestSlots[idx]);
+            for (int idx = 0; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
+                leftSlotColumn.Add(context.PlayerSlots[idx]);
+
+            var rightSlotColumn = new List<ClickableComponent>();
+            for (int idx = context.ChestColumns - 1; idx < context.ChestSlots.Count; idx += context.ChestColumns)
+                rightSlotColumn.Add(context.ChestSlots[idx]);
+            for (int idx = context.PlayerColumns - 1; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
+                rightSlotColumn.Add(context.PlayerSlots[idx]);
+
             if (preferLeftSide)
             {
-                for (int idx = 0; idx < context.ChestSlots.Count; idx += context.ChestColumns)
-                    slotColumnForArrows.Add(context.ChestSlots[idx]);
-                for (int idx = 0; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
-                    slotColumnForArrows.Add(context.PlayerSlots[idx]);
+                WireSideColumnNavigation(
+                    leftSlotColumn,
+                    new List<ClickableComponent> { this.UpArrow, this.DownArrow },
+                    new List<ClickableComponent>(),
+                    160000,
+                    true
+                );
+
+                var rightSideButtons = allSideButtons
+                    .Where(c => c != this.UpArrow && c != this.DownArrow)
+                    .ToList();
+                if (rightSideButtons.Count > 0)
+                {
+                    WireSideColumnNavigation(
+                        rightSlotColumn,
+                        rightSideButtons,
+                        new List<ClickableComponent>(),
+                        161000,
+                        false
+                    );
+                }
             }
             else
             {
-                for (int idx = context.ChestColumns - 1; idx < context.ChestSlots.Count; idx += context.ChestColumns)
-                    slotColumnForArrows.Add(context.ChestSlots[idx]);
-                for (int idx = context.PlayerColumns - 1; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
-                    slotColumnForArrows.Add(context.PlayerSlots[idx]);
+                WireSideColumnNavigation(
+                    rightSlotColumn,
+                    allSideButtons,
+                    new List<ClickableComponent>(),
+                    160000,
+                    false
+                );
             }
 
-            var navigationButtons = preferLeftSide
-                ? new List<ClickableComponent> { this.UpArrow, this.DownArrow }
-                : allSideButtons;
+            EnsureArrowAnchorBridge(context, allSideButtons);
+        }
 
-            WireSideColumnNavigation(
-                slotColumnForArrows,
-                navigationButtons,
-                new List<ClickableComponent>(),
-                160000,
-                preferLeftSide
+        private void EnsureArrowAnchorBridge(
+            SideButtonLayoutContext context,
+            List<ClickableComponent> allSideButtons
+        )
+        {
+            this.UpdateAuxScrollBarVisibility(context, allSideButtons);
+
+            var anchor = context.ArrowAnchorComponentOverride;
+            if (anchor == null)
+                return;
+
+            bool hasIntermediateComponent = allSideButtons.Any(c =>
+                c != null
+                && c != this.UpArrow
+                && c != this.DownArrow
+                && c != anchor
+                && c.bounds.Center.Y > anchor.bounds.Center.Y
+                && c.bounds.Center.Y < this.UpArrow.bounds.Center.Y
             );
+
+            if (!hasIntermediateComponent)
+            {
+                anchor.downNeighborID = this.UpArrow.myID;
+                this.UpArrow.upNeighborID = anchor.myID;
+            }
+        }
+
+        private void UpdateAuxScrollBarVisibility(
+            SideButtonLayoutContext context,
+            List<ClickableComponent> allSideButtons
+        )
+        {
+            this.ShowAuxScrollBar = false;
+            this.IsDraggingAuxScrollBar = false;
+            this.ScrollBarRunner = Rectangle.Empty;
+
+            bool hasIntermediateComponentBetweenArrows = allSideButtons.Any(c =>
+                c != null
+                && c != this.UpArrow
+                && c != this.DownArrow
+                && BoundsOverlapHorizontally(c.bounds, this.UpArrow.bounds, 24)
+                && c.bounds.Center.Y > this.UpArrow.bounds.Center.Y
+                && c.bounds.Center.Y < this.DownArrow.bounds.Center.Y
+            );
+
+            if (hasIntermediateComponentBetweenArrows)
+                return;
+
+            int runnerX = this.UpArrow.bounds.Center.X - (this.ScrollBarThumb.bounds.Width / 2);
+            int runnerY = this.UpArrow.bounds.Bottom + 4;
+            int runnerBottom = this.DownArrow.bounds.Top - 4;
+            int runnerHeight = Math.Max(8, runnerBottom - runnerY);
+
+            this.ScrollBarRunner = new Rectangle(
+                runnerX,
+                runnerY,
+                this.ScrollBarThumb.bounds.Width,
+                runnerHeight
+            );
+            this.ShowAuxScrollBar = true;
+        }
+
+        private static bool BoundsOverlapHorizontally(
+            Rectangle a,
+            Rectangle b,
+            int tolerance
+        )
+        {
+            return a.Right >= b.Left - tolerance && a.Left <= b.Right + tolerance;
         }
 
         private static void WireSideColumnNavigation(
@@ -658,8 +790,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             float upAlpha = this.CanScroll(items, -1) ? 1f : 0.35f;
             float downAlpha = this.CanScroll(items, 1) ? 1f : 0.35f;
 
+            this.SyncAuxScrollBarThumb(items);
             this.UpArrow.draw(b, Color.White * upAlpha, 0.9f);
             this.DownArrow.draw(b, Color.White * downAlpha, 0.9f);
+            if (this.ShowAuxScrollBar && this.ScrollBarRunner.Height > 0)
+            {
+                IClickableMenu.drawTextureBox(
+                    b,
+                    Game1.mouseCursors,
+                    new Rectangle(403, 383, 6, 6),
+                    this.ScrollBarRunner.X,
+                    this.ScrollBarRunner.Y,
+                    this.ScrollBarRunner.Width,
+                    this.ScrollBarRunner.Height,
+                    Color.White,
+                    4f
+                );
+                this.ScrollBarThumb.draw(b);
+            }
         }
 
         public void PerformHoverAction(int x, int y, IList<Item> items)
@@ -672,6 +820,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             this.UpArrow.scale = this.UpArrow.containsPoint(x, y) && canScrollUp ? 4.1f : 4f;
             this.DownArrow.scale = this.DownArrow.containsPoint(x, y) && canScrollDown ? 4.1f : 4f;
+            this.ScrollBarThumb.scale =
+                this.ShowAuxScrollBar && this.ScrollBarThumb.containsPoint(x, y) ? 4.1f : 4f;
         }
 
         public bool ReceiveLeftClick(int x, int y, IList<Item> items)
@@ -694,6 +844,22 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     this.Scroll(items, 1);
                 }
                 return true;
+            }
+            if (this.ShowAuxScrollBar)
+            {
+                if (this.ScrollBarThumb.containsPoint(x, y))
+                {
+                    this.IsDraggingAuxScrollBar = true;
+                    this.AuxScrollDragOffset = y - this.ScrollBarThumb.bounds.Y;
+                    return true;
+                }
+                if (this.ScrollBarRunner.Contains(x, y))
+                {
+                    this.IsDraggingAuxScrollBar = true;
+                    this.AuxScrollDragOffset = this.ScrollBarThumb.bounds.Height / 2;
+                    this.UpdateAuxScrollFromMouse(y, items);
+                    return true;
+                }
             }
             return false;
         }
@@ -720,6 +886,18 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (items == null || items.Count <= this.Menu.capacity)
                 return;
 
+            if (this.IsDraggingAuxScrollBar)
+            {
+                if (Mouse.GetState().LeftButton == ButtonState.Pressed)
+                {
+                    this.UpdateAuxScrollFromMouse(Game1.getMouseY(), items);
+                }
+                else
+                {
+                    this.IsDraggingAuxScrollBar = false;
+                }
+            }
+
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
             float thumbY = gamePadState.ThumbSticks.Right.Y;
             int currentDirection =
@@ -735,6 +913,61 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
             this.LastRightStickDirection = currentDirection;
+        }
+
+        private void SyncAuxScrollBarThumb(IList<Item> items)
+        {
+            if (!this.ShowAuxScrollBar || this.ScrollBarRunner.Height <= 0)
+                return;
+
+            int maxScroll = this.GetMaxScrollRow(items);
+            int minY = this.ScrollBarRunner.Y;
+            int maxY = Math.Max(minY, this.ScrollBarRunner.Bottom - this.ScrollBarThumb.bounds.Height);
+            int targetY;
+
+            if (maxScroll <= 0)
+            {
+                targetY = minY;
+            }
+            else
+            {
+                float progress = this.ScrollRow / (float)maxScroll;
+                targetY = minY + (int)Math.Round((maxY - minY) * progress);
+            }
+
+            this.ScrollBarThumb.bounds = new Rectangle(
+                this.ScrollBarRunner.X,
+                targetY,
+                this.ScrollBarThumb.bounds.Width,
+                this.ScrollBarThumb.bounds.Height
+            );
+        }
+
+        private void UpdateAuxScrollFromMouse(int mouseY, IList<Item> items)
+        {
+            if (!this.ShowAuxScrollBar || this.ScrollBarRunner.Height <= 0)
+                return;
+
+            int maxScroll = this.GetMaxScrollRow(items);
+            int minY = this.ScrollBarRunner.Y;
+            int maxY = Math.Max(minY, this.ScrollBarRunner.Bottom - this.ScrollBarThumb.bounds.Height);
+            int thumbY = Math.Clamp(mouseY - this.AuxScrollDragOffset, minY, maxY);
+
+            this.ScrollBarThumb.bounds = new Rectangle(
+                this.ScrollBarThumb.bounds.X,
+                thumbY,
+                this.ScrollBarThumb.bounds.Width,
+                this.ScrollBarThumb.bounds.Height
+            );
+
+            if (maxScroll <= 0)
+            {
+                this.ScrollRow = 0;
+                return;
+            }
+
+            float progress = maxY == minY ? 0f : (thumbY - minY) / (float)(maxY - minY);
+            this.ScrollRow = Math.Clamp((int)Math.Round(progress * maxScroll), 0, maxScroll);
         }
     }
 }
