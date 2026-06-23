@@ -100,7 +100,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     codes[i].opcode = OpCodes.Pop;
                     codes[i].operand = null;
                     codes.Insert(i + 1, new CodeInstruction(OpCodes.Ldc_I4_0));
-                    Log.Debug("Patching UIInfoSuite2Alt to bypass built-in _hasFullInventoryView offset adjustment");
                 }
 
                 if (codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo f1 && f1.Name == "yPositionOnScreen")
@@ -115,7 +114,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                                 {
                                     codes.Insert(k + 1, new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(InventoryMenuPatcher), nameof(InventoryMenuPatcher.GetExtraHeight))));
                                     codes.Insert(k + 2, new CodeInstruction(OpCodes.Add));
-                                    Log.Debug("Patching UIInfoSuite2Alt to add extra height to baseY");
                                     break;
                                 }
                             }

@@ -2,6 +2,7 @@ using CpdnCristiano.StardewValleyMod.Common.Log;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
 using CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher;
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView;
 
@@ -23,8 +24,43 @@ public class ModEntry : Mod
             patches.Add(new UiInfo2AltPatcher());
         }
         HarmonyPatcher.Apply(this, patches.ToArray());
+        helper.Events.Display.MenuChanged += this.OnMenuChanged;
 
         helper.ConsoleCommands.Add("fit_size", "Altera o tamanho máximo do inventário do jogador. Exemplo: fit_size 60", this.SetInventorySize);
+    }
+
+    private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
+    {
+        if (e.NewMenu is null)
+            return;
+
+        string typeChain = DescribeTypeChain(e.NewMenu.GetType());
+        string interfaces = DescribeInterfaces(e.NewMenu.GetType());
+        Log.Debug($"[MenuProbe] opened={e.NewMenu.GetType().FullName} inheritance={typeChain} interfaces={interfaces}");
+    }
+
+    private static string DescribeTypeChain(Type type)
+    {
+        var chain = new List<string>();
+        Type? current = type;
+        while (current != null)
+        {
+            chain.Add(current.FullName ?? current.Name);
+            current = current.BaseType;
+        }
+
+        return string.Join(" -> ", chain);
+    }
+
+    private static string DescribeInterfaces(Type type)
+    {
+        var names = type
+            .GetInterfaces()
+            .Select(p => p.FullName ?? p.Name)
+            .OrderBy(p => p)
+            .ToList();
+
+        return names.Count > 0 ? string.Join(", ", names) : "<none>";
     }
 
     private void SetInventorySize(string command, string[] args)

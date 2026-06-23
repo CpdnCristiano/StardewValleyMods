@@ -35,6 +35,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         private static readonly ConditionalWeakTable<IClickableMenu, BoxedInt> ChestLayoutHashes = new();
         private static readonly ConditionalWeakTable<IClickableMenu, BoxedInt> ChestLayoutLoggedHashes = new();
         private static readonly ConditionalWeakTable<IClickableMenu, MenuCachedFields> MenuFieldsCache = new();
+        private static int? ActiveItemGrabCtorY;
+        private static int? ActiveItemGrabCtorHeight;
+        private static bool ActiveItemGrabCtorIsCustom;
+        private static int? PlayerMaxItemsOverrideOriginal;
 
         private sealed class MenuCachedFields
         {
@@ -96,6 +100,33 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return Math.Max(0, GetRows() - DEFAULT_ROW_COUNT);
         }
 
+        private static int GetExtraHeightForRows(int rows)
+        {
+            int extraRows = Math.Max(0, rows - DEFAULT_ROW_COUNT);
+            if (extraRows <= 0)
+                return 0;
+
+            return (extraRows * DEFAULT_ROW_HEIGHT)
+                + ((extraRows - 1) * IClickableMenu.spaceBetweenTabs);
+        }
+
+        private static int GetCustomItemGrabMaxRows(int inventoryYPosition, int desiredRows)
+        {
+            if (!ActiveItemGrabCtorIsCustom || ActiveItemGrabCtorY is null || ActiveItemGrabCtorHeight is null)
+                return desiredRows;
+
+            int menuY = ActiveItemGrabCtorY.Value;
+            int menuHeight = ActiveItemGrabCtorHeight.Value;
+            int okButtonTopY = menuY + menuHeight - 192 - IClickableMenu.borderWidth;
+            int availableHeight = okButtonTopY - inventoryYPosition;
+            int rowStride = DEFAULT_ROW_HEIGHT + IClickableMenu.spaceBetweenTabs;
+            int maxRows = Math.Max(DEFAULT_ROW_COUNT, (availableHeight + IClickableMenu.spaceBetweenTabs) / rowStride);
+
+            Log.Debug($"[CustomItemGrabRows] menuY={menuY} menuHeight={menuHeight} inventoryY={inventoryYPosition} okTopY={okButtonTopY} availableHeight={availableHeight} rowStride={rowStride} desiredRows={desiredRows} maxRows={maxRows}");
+
+            return Math.Max(DEFAULT_ROW_COUNT, Math.Min(desiredRows, maxRows));
+        }
+
         public static int GetExtraHeight()
         {
             int extraRows = GetExtraRow();
@@ -129,6 +160,20 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     }
                 ),
                 prefix: this.GetHarmonyMethod(nameof(InventoryMenuPrefix))
+            );
+
+            PatchInventoryMenuConstructor(
+                harmony,
+                new Type[] { typeof(int), typeof(int), typeof(bool), typeof(IList<Item>), typeof(highlightThisItem) },
+                nameof(InventoryMenuFiveArgPrefix),
+                nameof(InventoryMenuFiveArgPostfix)
+            );
+
+            PatchInventoryMenuConstructor(
+                harmony,
+                new Type[] { typeof(int), typeof(int), typeof(bool), typeof(IList<Item>), typeof(highlightThisItem), typeof(int), typeof(int) },
+                nameof(InventoryMenuSevenArgPrefix),
+                nameof(InventoryMenuSevenArgPostfix)
             );
 
             harmony.Patch(
@@ -228,6 +273,25 @@ typeof(bool) }
                     original: method,
                     prefix: prefixName == null ? null : this.GetHarmonyMethod(prefixName),
                     postfix: postfixName == null ? null : this.GetHarmonyMethod(postfixName)
+                );
+            }
+        }
+
+        private void PatchInventoryMenuConstructor(Harmony harmony, Type[] parameters, string prefixName, string postfixName)
+        {
+            ConstructorInfo? ctor = typeof(InventoryMenu).GetConstructor(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                parameters,
+                null
+            );
+
+            if (ctor != null)
+            {
+                harmony.Patch(
+                    original: ctor,
+                    prefix: this.GetHarmonyMethod(prefixName),
+                    postfix: this.GetHarmonyMethod(postfixName)
                 );
             }
         }
@@ -750,7 +814,6 @@ typeof(bool) }
                         new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(InventoryMenuPatcher), nameof(GetExtraHeight)))
                     );
                     codes.Insert(i + 7, new CodeInstruction(OpCodes.Add));
-                    Log.Debug("Patching ShopMenu to add extra height to the shop menu");
                     break;
                 }
             }
@@ -1010,24 +1073,6 @@ typeof(bool) }
                 menu.allClickableComponents.Count
             );
 
-            EmitChestLayoutLog(
-                menu,
-                layoutHash,
-                sideAnchorBtn,
-                alignedButtons,
-                chestTopColumn,
-                colorBtn,
-                fillBtn,
-                organizeBtn,
-                okBtn,
-                trashBtn,
-                playerGrid
-                ,
-                axisXDebug,
-                chestMenu,
-                playerMenu
-            );
-
             if (!UpdateCachedLayoutHash(menu, layoutHash))
             {
                 return;
@@ -1062,6 +1107,13 @@ typeof(bool) }
                 int trashBaseY = shouldMoveOkButton && okBtn != null ? okBtn.bounds.Y : playerGrid.DownArrow.bounds.Y;
                 trashBtn.bounds.X = sideAnchorCenterX - (trashBtn.bounds.Width / 2);
                 trashBtn.bounds.Y = trashBaseY - 8 - trashBtn.bounds.Height;
+            }
+
+            if (menu is ItemGrabMenu && menu.GetType() != typeof(ItemGrabMenu))
+            {
+                Log.Debug(
+                    $"[CustomItemGrabLayout] menu={menu.GetType().FullName} playerRows={playerMenu.rows} playerCapacity={playerMenu.capacity} playerFirstRowY={playerFirstRowY} playerLastRowY={playerLastRowY} upArrow=({playerGrid.UpArrow.bounds.X},{playerGrid.UpArrow.bounds.Y}) downArrow=({playerGrid.DownArrow.bounds.X},{playerGrid.DownArrow.bounds.Y}) ok={DescribeComponent(okBtn)} trash={DescribeComponent(trashBtn)}"
+                );
             }
 
             if (colorPicker != null && pickerToggle != null && colorBtn != null)
@@ -1345,40 +1397,6 @@ typeof(bool) }
             return hash.ToHashCode();
         }
 
-        private static void EmitChestLayoutLog(
-            IClickableMenu menu,
-            int layoutHash,
-            ClickableComponent anchorBtn,
-            List<ClickableComponent> alignedButtons,
-            List<ClickableComponent> chestTopColumn,
-            ClickableComponent? colorBtn,
-            ClickableComponent? fillBtn,
-            ClickableComponent? organizeBtn,
-            ClickableComponent? okBtn,
-            ClickableComponent? trashBtn,
-            GridViewport playerGrid,
-            List<string> debugLines,
-            InventoryMenu chestMenu,
-            InventoryMenu playerMenu)
-        {
-            var logged = ChestLayoutLoggedHashes.GetValue(menu, _ => new BoxedInt(int.MinValue));
-            if (logged.Value == layoutHash) return;
-            logged.Value = layoutHash;
-
-            Log.Debug($"[ChestLayout] anchor={DescribeComponent(anchorBtn)}");
-            Log.Debug($"[ChestLayout] menuType={menu.GetType().FullName} chestMenuXY=({chestMenu.xPositionOnScreen},{chestMenu.yPositionOnScreen}) chestRows={chestMenu.rows} chestCapacity={chestMenu.capacity} chestSlots={chestMenu.inventory?.Count ?? 0} playerMenuXY=({playerMenu.xPositionOnScreen},{playerMenu.yPositionOnScreen}) playerRows={playerMenu.rows} playerCapacity={playerMenu.capacity} playerSlots={playerMenu.inventory?.Count ?? 0}");
-            Log.Debug($"[ChestLayout] explicit color={DescribeComponent(colorBtn)} fill={DescribeComponent(fillBtn)} organize={DescribeComponent(organizeBtn)} ok={DescribeComponent(okBtn)} trash={DescribeComponent(trashBtn)}");
-            Log.Debug($"[ChestLayout] alignedButtons.count={alignedButtons.Count}");
-            Log.Debug($"[ChestLayout] alignedButtons={string.Join(" | ", alignedButtons.Select(DescribeComponent))}");
-            Log.Debug($"[ChestLayout] chestTopColumn.count={chestTopColumn.Count}");
-            Log.Debug($"[ChestLayout] chestTopColumn={string.Join(" | ", chestTopColumn.Select(DescribeComponent))}");
-            Log.Debug($"[ChestLayout] arrowUp={DescribeComponent(playerGrid.UpArrow)} arrowDown={DescribeComponent(playerGrid.DownArrow)}");
-            foreach (var line in debugLines)
-            {
-                Log.Debug($"[ChestLayout] {line}");
-            }
-        }
-
         private static DiscreteColorPicker? FindColorPicker(IClickableMenu menu)
         {
             if (menu == null) return null;
@@ -1466,15 +1484,15 @@ typeof(bool) }
 
         private static void iClickableMenuPrefix(IClickableMenu __instance, ref int y, ref int height)
         {
-            Log.Debug($"[iClickableMenuPrefix] Type={__instance.GetType().FullName} originalY={y} originalHeight={height}");
             if (__instance is MuseumMenu)
             {
-                Log.Debug("[iClickableMenuPrefix] Early return for MuseumMenu");
                 return;
             }
 
             if (__instance is not (GameMenu or MenuWithInventory or ShopMenu or TailoringMenu))
                 return;
+
+            bool isCustomItemGrabMenu = __instance is ItemGrabMenu && __instance.GetType() != typeof(ItemGrabMenu);
 
             if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
             {
@@ -1494,8 +1512,14 @@ typeof(bool) }
                     int extraSpace = GetExtraHeight();
                     height += extraSpace;
                     y -= extraSpace / 2;
-                    Log.Debug($"[iClickableMenuPrefix] Expanded height for {__instance.GetType().FullName} by {extraSpace}, newY={y} newHeight={height}");
                 }
+            }
+
+            if (__instance is ItemGrabMenu)
+            {
+                ActiveItemGrabCtorY = y;
+                ActiveItemGrabCtorHeight = height;
+                ActiveItemGrabCtorIsCustom = isCustomItemGrabMenu;
             }
         }
 
@@ -1519,15 +1543,64 @@ typeof(bool) }
             return false;
         }
 
+        private static void ApplyCustomItemGrabPlayerInventoryLimit(ref int yPosition, ref int rows, ref int capacity)
+        {
+            if (!ActiveItemGrabCtorIsCustom || Game1.player is null)
+                return;
+
+            int desiredRows = Math.Max(rows, Math.Max(DEFAULT_ROW_COUNT, Game1.player.maxItems.Value / DEFAULT_COLUMN_COUNT));
+            int targetRows = GetCustomItemGrabMaxRows(yPosition, desiredRows);
+            int extraSpace = GetExtraHeightForRows(targetRows);
+
+            yPosition -= extraSpace;
+            rows = targetRows;
+            capacity = rows * DEFAULT_COLUMN_COUNT;
+
+            Log.Debug($"[CustomItemGrabRows] forced rows={rows} capacity={capacity} extraSpace={extraSpace} adjustedPlayerInventoryY={yPosition}");
+        }
+
+        private static void InventoryMenuFiveArgPrefix(ref int yPosition, ref bool playerInventory)
+        {
+            if (!playerInventory || !ActiveItemGrabCtorIsCustom || Game1.player is null)
+                return;
+
+            int rows = DEFAULT_ROW_COUNT;
+            int capacity = DEFAULT_MAX_ITEMS;
+            ApplyCustomItemGrabPlayerInventoryLimit(ref yPosition, ref rows, ref capacity);
+
+            PlayerMaxItemsOverrideOriginal = Game1.player.maxItems.Value;
+            Game1.player.maxItems.Value = capacity;
+            Log.Debug($"[CustomItemGrabRows] fiveArgOverride capacity={capacity} temporaryMaxItems={Game1.player.maxItems.Value}");
+        }
+
+        private static void InventoryMenuFiveArgPostfix()
+        {
+            if (PlayerMaxItemsOverrideOriginal is int original && Game1.player is not null)
+            {
+                Game1.player.maxItems.Value = original;
+                PlayerMaxItemsOverrideOriginal = null;
+            }
+        }
+
+        private static void InventoryMenuSevenArgPrefix(ref int yPosition, ref bool playerInventory, ref int capacity, ref int rows)
+        {
+            if (!playerInventory)
+                return;
+
+            ApplyCustomItemGrabPlayerInventoryLimit(ref yPosition, ref rows, ref capacity);
+        }
+
+        private static void InventoryMenuSevenArgPostfix()
+        {
+        }
+
         private static void InventoryMenuPrefix(ref int yPosition, ref IList<Item> actualInventory, ref bool playerInventory, ref int capacity, ref int rows)
         {
-            Log.Debug($"[InventoryMenuPrefix] Called. IsCalledFromMuseum={IsCalledFromMuseum()} actualInventoryCount={actualInventory?.Count} playerInventory={playerInventory} rows={rows}");
             if (actualInventory is not null && actualInventory != Game1.player.Items)
                 return;
 
             if (IsCalledFromMuseum())
             {
-                Log.Debug("[InventoryMenuPrefix] Restricting rows to 3 for MuseumMenu");
                 rows = 3;
                 capacity = rows * DEFAULT_COLUMN_COUNT;
                 return;
@@ -1535,6 +1608,20 @@ typeof(bool) }
 
             if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
             {
+                if (playerInventory && ActiveItemGrabCtorIsCustom)
+                {
+                    int desiredRows = Math.Max(rows, Math.Max(DEFAULT_ROW_COUNT, Game1.player.maxItems.Value / DEFAULT_COLUMN_COUNT));
+                    int targetRows = GetCustomItemGrabMaxRows(yPosition, desiredRows);
+                    int extraSpace = GetExtraHeightForRows(targetRows);
+
+                    yPosition -= extraSpace;
+                    rows = targetRows;
+                    capacity = rows * DEFAULT_COLUMN_COUNT;
+
+                    Log.Debug($"[CustomItemGrabRows] forced rows={rows} capacity={capacity} extraSpace={extraSpace} adjustedPlayerInventoryY={yPosition}");
+                    return;
+                }
+
                 int dynamicMax = GetDynamicMaxRows();
                 if (rows > dynamicMax)
                 {
@@ -1543,12 +1630,23 @@ typeof(bool) }
                 }
                 else if (rows == DEFAULT_ROW_COUNT)
                 {
+                    int targetRows = GetRows();
+                    if (playerInventory && ActiveItemGrabCtorIsCustom)
+                    {
+                        int desiredRows = Math.Max(DEFAULT_ROW_COUNT, Game1.player.maxItems.Value / DEFAULT_COLUMN_COUNT);
+                        targetRows = GetCustomItemGrabMaxRows(yPosition, desiredRows);
+                    }
+
                     if (playerInventory)
                     {
-                        int extraSpace = GetExtraHeight();
+                        int extraSpace = GetExtraHeightForRows(targetRows);
                         yPosition -= extraSpace;
+                        if (ActiveItemGrabCtorIsCustom)
+                        {
+                            Log.Debug($"[CustomItemGrabRows] targetRows={targetRows} extraSpace={extraSpace} adjustedPlayerInventoryY={yPosition}");
+                        }
                     }
-                    rows = GetRows();
+                    rows = targetRows;
                     capacity = rows * DEFAULT_COLUMN_COUNT;
                 }
             }
@@ -2031,58 +2129,18 @@ typeof(bool) }
             return true;
         }
 
-        private static void LogLeftClickInfo(IClickableMenu menu, int x, int y)
-        {
-            Log.Debug($"[LeftClickLog] Mouse clicked at X={x}, Y={y} in menu {menu.GetType().FullName}");
-
-            if (menu.allClickableComponents != null)
-            {
-                foreach (var c in menu.allClickableComponents)
-                {
-                    if (c != null && c.containsPoint(x, y))
-                    {
-                        Log.Debug($"[LeftClickLog] Clicked component in allClickableComponents: {DescribeComponent(c)}");
-                    }
-                }
-            }
-
-            Type? type = menu.GetType();
-            while (type != null)
-            {
-                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
-                {
-                    if (typeof(ClickableComponent).IsAssignableFrom(field.FieldType))
-                    {
-                        try
-                        {
-                            var c = field.GetValue(menu) as ClickableComponent;
-                            if (c != null && c.containsPoint(x, y))
-                            {
-                                Log.Debug($"[LeftClickLog] Clicked field '{field.Name}' of type {type.Name}: {DescribeComponent(c)}");
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                type = type.BaseType;
-            }
-        }
-
         private static bool ItemGrabMenuReceiveLeftClickPrefix(ItemGrabMenu __instance, int x, int y, bool playSound)
         {
-            LogLeftClickInfo(__instance, x, y);
             return true;
         }
 
         private static bool ShopMenuReceiveLeftClickPrefix(ShopMenu __instance, int x, int y, bool playSound)
         {
-            LogLeftClickInfo(__instance, x, y);
             return true;
         }
 
         private static bool GameMenuReceiveLeftClickPrefix(GameMenu __instance, int x, int y, bool playSound)
         {
-            LogLeftClickInfo(__instance, x, y);
             return true;
         }
 

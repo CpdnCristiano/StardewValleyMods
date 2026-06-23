@@ -53,7 +53,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         )
                     );
                     codes.Insert(i + 5, new CodeInstruction(OpCodes.Add));
-                    Log.Debug("Patching UIInfoSuite2 to add extra height to the billboard");
                     break;
                 }
             }
