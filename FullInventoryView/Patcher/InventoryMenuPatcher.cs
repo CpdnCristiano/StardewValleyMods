@@ -1221,6 +1221,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var pickerToggle = fields.PickerToggle;
             var colorPicker = fields.ColorPicker;
             var preferredSide = GetPreferredSide(menu);
+            int preferredSideOffsetPixels = GetPreferredSideOffsetPixels(menu);
             int anchorCenterX =
                 (okBtn ?? trashBtn ?? organizeBtn ?? fillBtn ?? colorBtn)?.bounds.Center.X ?? 0;
             int layoutHash = ComputeChestLayoutHash(
@@ -1247,6 +1248,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     ChestColumns = chestColumns,
                     PlayerColumns = playerColumns,
                     PreferredSide = preferredSide,
+                    PreferredSideOffsetPixels = preferredSideOffsetPixels,
                     CenterOkBetweenArrows =
                         menu is MuseumMenu
                         || CurrentParentMenu is MuseumMenu
@@ -1271,6 +1273,17 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
 
             return GridViewport.SideLayoutPreference.Right;
+        }
+
+        private static int GetPreferredSideOffsetPixels(IClickableMenu menu)
+        {
+            string typeName = menu.GetType().Name;
+            if (typeName == "HugeChestMenu")
+            {
+                return 64;
+            }
+
+            return 28;
         }
 
         private static ClickableComponent? FindFieldContaining(object obj, string substring)

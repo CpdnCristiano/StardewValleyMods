@@ -66,6 +66,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public int ChestColumns { get; init; }
             public int PlayerColumns { get; init; }
             public SideLayoutPreference PreferredSide { get; init; } = SideLayoutPreference.Right;
+            public int PreferredSideOffsetPixels { get; init; } = 28;
             public bool CenterOkBetweenArrows { get; init; }
             public ClickableComponent? ColorButton { get; init; }
             public ClickableComponent? FillButton { get; init; }
@@ -243,6 +244,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         public void LayoutSideButtons(SideButtonLayoutContext context)
         {
             bool preferLeftSide = context.PreferredSide == SideLayoutPreference.Left;
+            int preferredOffset = context.PreferredSideOffsetPixels;
             var topAnchorBtn =
                 context.ColorButton
                 ?? context.FillButton
@@ -259,8 +261,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (sideAnchorBtn == null)
             {
                 int targetX = preferLeftSide
-                    ? context.PlayerSlots[0].bounds.Left - 28 - this.UpArrow.bounds.Width
-                    : context.PlayerSlots[context.PlayerColumns - 1].bounds.Right + 28;
+                    ? context.PlayerSlots[0].bounds.Left - preferredOffset - this.UpArrow.bounds.Width
+                    : context.PlayerSlots[context.PlayerColumns - 1].bounds.Right + preferredOffset;
                 this.UpArrow.bounds.X = targetX;
                 this.UpArrow.bounds.Y = context.PlayerSlots[0].bounds.Top;
                 this.DownArrow.bounds.X = targetX;
@@ -292,7 +294,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     fallbackRightmostSlots,
                     new List<ClickableComponent> { this.UpArrow, this.DownArrow },
                     new List<ClickableComponent>(),
-                    160000
+                    160000,
+                    preferLeftSide
                 );
                 return;
             }
@@ -336,11 +339,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             int sideAnchorCenterX = sideAnchorBtn.bounds.Center.X;
             int topAnchorCenterX = (topAnchorBtn ?? sideAnchorBtn).bounds.Center.X;
-            if (preferLeftSide)
-            {
-                sideAnchorCenterX = context.PlayerSlots[0].bounds.Left - 28 - (this.UpArrow.bounds.Width / 2);
-                topAnchorCenterX = context.ChestSlots[0].bounds.Left - 28 - (this.UpArrow.bounds.Width / 2);
-            }
+            int arrowCenterX = preferLeftSide
+                ? context.PlayerSlots[0].bounds.Left - preferredOffset - (this.UpArrow.bounds.Width / 2)
+                : sideAnchorCenterX;
 
             var chestTopColumn = FindChestColumnButtons(
                 context.Menu,
@@ -382,9 +383,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 context.PlayerSlots.Count - 1,
                 (this.Menu.rows - 1) * context.PlayerColumns
             );
-            this.UpArrow.bounds.X = sideAnchorCenterX - (this.UpArrow.bounds.Width / 2);
+            this.UpArrow.bounds.X = arrowCenterX - (this.UpArrow.bounds.Width / 2);
             this.UpArrow.bounds.Y = context.PlayerSlots[0].bounds.Top;
-            this.DownArrow.bounds.X = sideAnchorCenterX - (this.DownArrow.bounds.Width / 2);
+            this.DownArrow.bounds.X = arrowCenterX - (this.DownArrow.bounds.Width / 2);
             this.DownArrow.bounds.Y =
                 context.PlayerSlots[playerLastRowIndex].bounds.Bottom - this.DownArrow.bounds.Height;
 
@@ -431,27 +432,32 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     context.Menu.allClickableComponents.Add(comp);
             }
 
-            var combinedRightmostSlots = new List<ClickableComponent>();
+            var slotColumnForArrows = new List<ClickableComponent>();
             if (preferLeftSide)
             {
                 for (int idx = 0; idx < context.ChestSlots.Count; idx += context.ChestColumns)
-                    combinedRightmostSlots.Add(context.ChestSlots[idx]);
+                    slotColumnForArrows.Add(context.ChestSlots[idx]);
                 for (int idx = 0; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
-                    combinedRightmostSlots.Add(context.PlayerSlots[idx]);
+                    slotColumnForArrows.Add(context.PlayerSlots[idx]);
             }
             else
             {
                 for (int idx = context.ChestColumns - 1; idx < context.ChestSlots.Count; idx += context.ChestColumns)
-                    combinedRightmostSlots.Add(context.ChestSlots[idx]);
+                    slotColumnForArrows.Add(context.ChestSlots[idx]);
                 for (int idx = context.PlayerColumns - 1; idx < context.PlayerSlots.Count; idx += context.PlayerColumns)
-                    combinedRightmostSlots.Add(context.PlayerSlots[idx]);
+                    slotColumnForArrows.Add(context.PlayerSlots[idx]);
             }
 
+            var navigationButtons = preferLeftSide
+                ? new List<ClickableComponent> { this.UpArrow, this.DownArrow }
+                : allSideButtons;
+
             WireSideColumnNavigation(
-                combinedRightmostSlots,
-                allSideButtons,
+                slotColumnForArrows,
+                navigationButtons,
                 new List<ClickableComponent>(),
-                160000
+                160000,
+                preferLeftSide
             );
         }
 
@@ -459,7 +465,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             List<ClickableComponent> rightmostSlots,
             List<ClickableComponent> rightColumn,
             List<ClickableComponent> bottomComponents,
-            int startingDynamicId
+            int startingDynamicId,
+            bool columnIsOnLeft
         )
         {
             rightColumn = rightColumn.Distinct().OrderBy(c => c.bounds.Center.Y).ToList();
@@ -496,7 +503,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
 
                 if (closestSlot != null)
-                    comp.leftNeighborID = closestSlot.myID;
+                {
+                    if (columnIsOnLeft)
+                        comp.rightNeighborID = closestSlot.myID;
+                    else
+                        comp.leftNeighborID = closestSlot.myID;
+                }
             }
 
             foreach (var slot in rightmostSlots)
@@ -514,7 +526,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
 
                 if (closestRightComp != null)
-                    slot.rightNeighborID = closestRightComp.myID;
+                {
+                    if (columnIsOnLeft)
+                        slot.leftNeighborID = closestRightComp.myID;
+                    else
+                        slot.rightNeighborID = closestRightComp.myID;
+                }
             }
         }
 
