@@ -21,7 +21,7 @@ _releases/
 *.ps1
 /dist
 release.ps1
-
+decompiler/
 StardewMemes/
 ## To Comatiblide mods
 unlockable-bundles-main

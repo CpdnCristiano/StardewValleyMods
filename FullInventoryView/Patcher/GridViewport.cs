@@ -27,6 +27,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         public bool ShowAuxScrollBar { get; private set; } = false;
         public bool IsDraggingAuxScrollBar { get; private set; } = false;
         public int AuxScrollDragOffset { get; private set; } = 0;
+        public bool HasResolvedCustomLayout { get; set; } = false;
 
         public int LastRightStickDirection { get; set; } = 0;
         public int LastPageComponentsHash { get; set; } = int.MinValue;
@@ -165,6 +166,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ClickableTextureComponent? organizeButton
         )
         {
+            this.HasResolvedCustomLayout = true;
             if (slots.Count == 0)
                 return;
 
@@ -260,6 +262,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public void LayoutSideButtons(SideButtonLayoutContext context)
         {
+            this.HasResolvedCustomLayout = true;
             bool preferLeftSide = context.PreferredSide == SideLayoutPreference.Left;
             int preferredOffset = context.PreferredSideOffsetPixels;
             var topAnchorBtn =
@@ -321,13 +324,33 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     }
                 }
 
-                WireSideColumnNavigation(
+                GridViewportLayoutHelpers.WireSideColumnNavigation(
                     fallbackRightmostSlots,
                     new List<ClickableComponent> { this.UpArrow, this.DownArrow },
                     new List<ClickableComponent>(),
                     160000,
                     preferLeftSide
                 );
+
+                var fallbackButtons = new List<ClickableComponent> { this.UpArrow, this.DownArrow };
+                this.UpdateAuxScrollBarVisibility(context, fallbackButtons);
+                if (context.ArrowAnchorComponentOverride != null)
+                {
+                    bool hasIntermediateComponent = fallbackButtons.Any(c =>
+                        c != null
+                        && c != this.UpArrow
+                        && c != this.DownArrow
+                        && c != context.ArrowAnchorComponentOverride
+                        && c.bounds.Center.Y > context.ArrowAnchorComponentOverride.bounds.Center.Y
+                        && c.bounds.Center.Y < this.UpArrow.bounds.Center.Y
+                    );
+
+                    if (!hasIntermediateComponent)
+                    {
+                        context.ArrowAnchorComponentOverride.downNeighborID = this.UpArrow.myID;
+                        this.UpArrow.upNeighborID = context.ArrowAnchorComponentOverride.myID;
+                    }
+                }
                 return;
             }
 
@@ -342,7 +365,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     context.PlayerSlots.Max(s => s.bounds.Bottom)
                 ) + 16;
 
-            var alignedButtons = GetComponentsOnAxisX(
+            var alignedButtons = GridViewportLayoutHelpers.GetComponentsOnAxisX(
                 context.Menu,
                 sideAnchorBtn,
                 24,
@@ -382,7 +405,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 arrowCenterX = context.ArrowAnchorCenterXOverride.Value;
             }
 
-            var chestTopColumn = FindChestColumnButtons(
+            var chestTopColumn = GridViewportLayoutHelpers.FindChestColumnButtons(
                 context.Menu,
                 context.ChestSlots,
                 context.PlayerSlots,
@@ -486,7 +509,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             if (preferLeftSide)
             {
-                WireSideColumnNavigation(
+                GridViewportLayoutHelpers.WireSideColumnNavigation(
                     leftSlotColumn,
                     new List<ClickableComponent> { this.UpArrow, this.DownArrow },
                     new List<ClickableComponent>(),
@@ -499,7 +522,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     .ToList();
                 if (rightSideButtons.Count > 0)
                 {
-                    WireSideColumnNavigation(
+                    GridViewportLayoutHelpers.WireSideColumnNavigation(
                         rightSlotColumn,
                         rightSideButtons,
                         new List<ClickableComponent>(),
@@ -510,7 +533,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
             else
             {
-                WireSideColumnNavigation(
+                GridViewportLayoutHelpers.WireSideColumnNavigation(
                     rightSlotColumn,
                     allSideButtons,
                     new List<ClickableComponent>(),
@@ -562,7 +585,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 c != null
                 && c != this.UpArrow
                 && c != this.DownArrow
-                && BoundsOverlapHorizontally(c.bounds, this.UpArrow.bounds, 24)
+                && GridViewportLayoutHelpers.BoundsOverlapHorizontally(c.bounds, this.UpArrow.bounds, 24)
                 && c.bounds.Center.Y > this.UpArrow.bounds.Center.Y
                 && c.bounds.Center.Y < this.DownArrow.bounds.Center.Y
             );
@@ -570,7 +593,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (hasIntermediateComponentBetweenArrows)
                 return;
 
-            int runnerX = this.UpArrow.bounds.Center.X - (this.ScrollBarThumb.bounds.Width / 2);
+            int runnerX = this.UpArrow.bounds.X + 12;
             int runnerY = this.UpArrow.bounds.Bottom + 4;
             int runnerBottom = this.DownArrow.bounds.Top - 4;
             int runnerHeight = Math.Max(8, runnerBottom - runnerY);
@@ -582,176 +605,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 runnerHeight
             );
             this.ShowAuxScrollBar = true;
-        }
-
-        private static bool BoundsOverlapHorizontally(
-            Rectangle a,
-            Rectangle b,
-            int tolerance
-        )
-        {
-            return a.Right >= b.Left - tolerance && a.Left <= b.Right + tolerance;
-        }
-
-        private static void WireSideColumnNavigation(
-            List<ClickableComponent> rightmostSlots,
-            List<ClickableComponent> rightColumn,
-            List<ClickableComponent> bottomComponents,
-            int startingDynamicId,
-            bool columnIsOnLeft
-        )
-        {
-            rightColumn = rightColumn.Distinct().OrderBy(c => c.bounds.Center.Y).ToList();
-            bottomComponents = bottomComponents.Distinct().ToList();
-
-            int dynamicId = startingDynamicId;
-            foreach (var comp in rightColumn)
-            {
-                if (comp.myID == -1)
-                    comp.myID = dynamicId++;
-            }
-            foreach (var comp in bottomComponents)
-            {
-                if (comp.myID == -1)
-                    comp.myID = dynamicId++;
-            }
-
-            for (int i = 0; i < rightColumn.Count; i++)
-            {
-                var comp = rightColumn[i];
-                comp.upNeighborID = i > 0 ? rightColumn[i - 1].myID : -1;
-                comp.downNeighborID = i < rightColumn.Count - 1 ? rightColumn[i + 1].myID : -1;
-
-                ClickableComponent? closestSlot = null;
-                int minDistance = int.MaxValue;
-                foreach (var slot in rightmostSlots)
-                {
-                    int dist = Math.Abs(slot.bounds.Center.Y - comp.bounds.Center.Y);
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        closestSlot = slot;
-                    }
-                }
-
-                if (closestSlot != null)
-                {
-                    if (columnIsOnLeft)
-                        comp.rightNeighborID = closestSlot.myID;
-                    else
-                        comp.leftNeighborID = closestSlot.myID;
-                }
-            }
-
-            foreach (var slot in rightmostSlots)
-            {
-                ClickableComponent? closestRightComp = null;
-                int minDistance = int.MaxValue;
-                foreach (var comp in rightColumn)
-                {
-                    int dist = Math.Abs(comp.bounds.Center.Y - slot.bounds.Center.Y);
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        closestRightComp = comp;
-                    }
-                }
-
-                if (closestRightComp != null)
-                {
-                    if (columnIsOnLeft)
-                        slot.leftNeighborID = closestRightComp.myID;
-                    else
-                        slot.rightNeighborID = closestRightComp.myID;
-                }
-            }
-        }
-
-        private static List<ClickableComponent> GetComponentsOnAxisX(
-            IClickableMenu menu,
-            ClickableComponent anchorBtn,
-            int xTolerance,
-            int minY,
-            int maxY,
-            ClickableComponent? excludedButton,
-            ClickableComponent? upArrow,
-            ClickableComponent? downArrow,
-            List<ClickableComponent> chestSlots,
-            List<ClickableComponent> playerSlots
-        )
-        {
-            var alignedButtons = new List<ClickableComponent>();
-            if (menu.allClickableComponents == null)
-                return alignedButtons;
-
-            int anchorCenterX = anchorBtn.bounds.Center.X;
-            foreach (var component in menu.allClickableComponents)
-            {
-                if (component == null)
-                    continue;
-                if (component == upArrow || component == downArrow || component == excludedButton)
-                    continue;
-                if (component == menu.upperRightCloseButton || component.name == "upperRightCloseButton")
-                    continue;
-                if (chestSlots.Contains(component) || playerSlots.Contains(component))
-                    continue;
-                if (Math.Abs(component.bounds.Center.X - anchorCenterX) > xTolerance)
-                    continue;
-                if (component.bounds.Center.Y < minY || component.bounds.Center.Y > maxY)
-                    continue;
-
-                alignedButtons.Add(component);
-            }
-
-            return alignedButtons.Distinct().OrderBy(component => component.bounds.Center.Y).ToList();
-        }
-
-        private static List<ClickableComponent> FindChestColumnButtons(
-            IClickableMenu menu,
-            List<ClickableComponent> chestSlots,
-            List<ClickableComponent> playerSlots,
-            ClickableComponent? excludedButton,
-            ClickableComponent? upArrow,
-            ClickableComponent? downArrow,
-            ClickableComponent? okBtn,
-            ClickableComponent? trashBtn
-        )
-        {
-            var buttons = new List<ClickableComponent>();
-            if (menu.allClickableComponents == null)
-                return buttons;
-
-            int chestRightEdge = chestSlots.Max(s => s.bounds.Right) - 16;
-            int fullMinY =
-                Math.Min(chestSlots.Min(s => s.bounds.Top), playerSlots.Min(s => s.bounds.Top)) - 16;
-            int fullMaxY =
-                Math.Max(chestSlots.Max(s => s.bounds.Bottom), playerSlots.Max(s => s.bounds.Bottom)) + 16;
-
-            foreach (var component in menu.allClickableComponents)
-            {
-                if (component == null)
-                    continue;
-                if (
-                    component == excludedButton
-                    || component == upArrow
-                    || component == downArrow
-                    || component == okBtn
-                    || component == trashBtn
-                )
-                    continue;
-                if (component == menu.upperRightCloseButton || component.name == "upperRightCloseButton")
-                    continue;
-                if (chestSlots.Contains(component) || playerSlots.Contains(component))
-                    continue;
-                if (component.bounds.Center.X <= chestRightEdge || component.bounds.Center.X >= chestRightEdge + 300)
-                    continue;
-                if (component.bounds.Center.Y < fullMinY || component.bounds.Center.Y > fullMaxY)
-                    continue;
-
-                buttons.Add(component);
-            }
-
-            return buttons.Distinct().OrderBy(component => component.bounds.Center.Y).ToList();
         }
 
         public int GetTotalRows(IList<Item> items)
@@ -785,7 +638,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (items == null || items.Count <= this.Menu.capacity)
                 return;
 
-            this.LayoutArrows();
+            if (!this.CustomArrowLayout && !this.HasResolvedCustomLayout)
+            {
+                this.LayoutArrows();
+            }
 
             float upAlpha = this.CanScroll(items, -1) ? 1f : 0.35f;
             float downAlpha = this.CanScroll(items, 1) ? 1f : 0.35f;
@@ -886,18 +742,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (items == null || items.Count <= this.Menu.capacity)
                 return;
 
-            if (this.IsDraggingAuxScrollBar)
-            {
-                if (Mouse.GetState().LeftButton == ButtonState.Pressed)
-                {
-                    this.UpdateAuxScrollFromMouse(Game1.getMouseY(), items);
-                }
-                else
-                {
-                    this.IsDraggingAuxScrollBar = false;
-                }
-            }
-
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
             float thumbY = gamePadState.ThumbSticks.Right.Y;
             int currentDirection =
@@ -913,6 +757,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
             this.LastRightStickDirection = currentDirection;
+        }
+
+        public void UpdatePointerInteraction(IList<Item> items)
+        {
+            if (items == null || items.Count <= this.Menu.capacity)
+                return;
+            if (!this.IsDraggingAuxScrollBar)
+                return;
+
+            if (Mouse.GetState().LeftButton == ButtonState.Pressed)
+            {
+                this.UpdateAuxScrollFromMouse(Game1.getMouseY(), items);
+            }
+            else
+            {
+                this.IsDraggingAuxScrollBar = false;
+            }
         }
 
         private void SyncAuxScrollBarThumb(IList<Item> items)
@@ -952,6 +813,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             int minY = this.ScrollBarRunner.Y;
             int maxY = Math.Max(minY, this.ScrollBarRunner.Bottom - this.ScrollBarThumb.bounds.Height);
             int thumbY = Math.Clamp(mouseY - this.AuxScrollDragOffset, minY, maxY);
+            int previousY = this.ScrollBarThumb.bounds.Y;
 
             this.ScrollBarThumb.bounds = new Rectangle(
                 this.ScrollBarThumb.bounds.X,
@@ -968,6 +830,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             float progress = maxY == minY ? 0f : (thumbY - minY) / (float)(maxY - minY);
             this.ScrollRow = Math.Clamp((int)Math.Round(progress * maxScroll), 0, maxScroll);
+            if (previousY != thumbY)
+            {
+                Game1.playSound("shiny4");
+            }
         }
     }
 }
