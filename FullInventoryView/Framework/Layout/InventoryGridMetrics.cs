@@ -19,19 +19,60 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             return Math.Clamp(maxRows, DefaultRowCount, MaxRowCount);
         }
 
-        public static int GetPlayerVisibleRows()
+        public static int GetCurrentPlayerSlotCount(IList<Item>? playerInventoryOverride = null)
         {
-            if (Game1.player.maxItems.Value <= DefaultMaxItems)
+            if (Game1.player == null)
+                return 0;
+
+            int count = Game1.player.maxItems.Value;
+            if (Game1.player.Items != null)
+                count = Math.Max(count, Game1.player.Items.Count);
+            if (playerInventoryOverride != null)
+                count = Math.Max(count, playerInventoryOverride.Count);
+
+            return count;
+        }
+
+        public static bool PlayerHasExpandedInventory(IList<Item>? playerInventoryOverride = null)
+        {
+            return GetCurrentPlayerSlotCount(playerInventoryOverride) > DefaultMaxItems;
+        }
+
+        public static int GetPlayerVisibleRows(IList<Item>? playerInventoryOverride = null)
+        {
+            int slotCount = GetCurrentPlayerSlotCount(playerInventoryOverride);
+            if (slotCount <= DefaultMaxItems)
                 return DefaultRowCount;
 
             int maxAllowed = GetDynamicMaxRows();
-            int rows = Game1.player.maxItems.Value / DefaultColumnCount;
+            int rows = GetRequiredRows(slotCount, DefaultColumnCount);
             return Math.Min(rows, maxAllowed);
+        }
+
+
+        public static int GetEffectiveSlotCount(IList<Item>? inventory, bool isPlayerInventory = false)
+        {
+            int count = inventory?.Count ?? 0;
+            if (isPlayerInventory && Game1.player != null)
+                count = Math.Max(count, GetCurrentPlayerSlotCount(inventory));
+
+            return count;
+        }
+
+        public static int GetRequiredRows(int slotCount, int columns = DefaultColumnCount)
+        {
+            if (slotCount <= 0)
+                return 0;
+
+            if (columns <= 0)
+                columns = DefaultColumnCount;
+
+            return (slotCount + columns - 1) / columns;
         }
 
         public static int GetTotalRows(IList<Item> inventory)
         {
-            return Math.Max(0, (inventory.Count + DefaultColumnCount - 1) / DefaultColumnCount);
+            return GetRequiredRows(inventory.Count, DefaultColumnCount);
         }
 
         public static int GetExtraRow()

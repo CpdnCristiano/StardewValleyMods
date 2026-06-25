@@ -17,7 +17,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             Func<int> getExtraRow
         )
         {
-            if (Game1.player.maxItems.Value <= 36)
+            if (!InventoryGridMetrics.PlayerHasExpandedInventory())
                 return true;
 
             FieldInfo? isStorageShopField = typeof(ShopMenu).GetField(

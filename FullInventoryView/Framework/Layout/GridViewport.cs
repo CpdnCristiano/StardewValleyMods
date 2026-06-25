@@ -1,3 +1,5 @@
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Diagnostics;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -28,6 +30,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public int LastRightStickDirection { get; set; } = 0;
         public int LastPageComponentsHash { get; set; } = int.MinValue;
+        public int LastInventorySourceSignature { get; set; } = int.MinValue;
 
         public int Depth { get; set; } = 0;
         public IList<Item>? FullInventory { get; set; }
@@ -35,6 +38,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
         public int? OriginalMaxItems { get; set; }
         public Dictionary<ClickableComponent, int> OriginalButtonY { get; } = new();
         public Dictionary<ClickableComponent, Rectangle> OriginalButtonBounds { get; } = new();
+        public int LastInventoryPageSideLayoutSignature { get; private set; } = int.MinValue;
+        private readonly Dictionary<string, List<Rectangle>> LastInventoryPageButtonTargets = new();
+        private readonly Dictionary<string, List<Rectangle>> LastSideButtonTargets = new();
 
         public GridViewport(InventoryMenu menu)
         {
@@ -67,6 +73,29 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 4f
             );
             this.ScrollBarRunner = Rectangle.Empty;
+        }
+
+        private static string DescribeComponent(ClickableComponent? component)
+        {
+            if (component == null)
+                return "<null>";
+
+            string name = string.IsNullOrWhiteSpace(component.name) ? "<no-name>" : component.name;
+            Rectangle bounds = component.bounds;
+            return $"id={component.myID}, name={name}, x={bounds.X}, y={bounds.Y}, w={bounds.Width}, h={bounds.Height}";
+        }
+
+        private static string DescribeButtons(IEnumerable<ClickableComponent> buttons, int max = 8)
+        {
+            var parts = buttons
+                .Where(button => button != null)
+                .Take(max)
+                .Select(DescribeComponent)
+                .ToList();
+
+            int total = buttons.Count(button => button != null);
+            string suffix = total > max ? $", ... +{total - max}" : string.Empty;
+            return $"count={total} [{string.Join(" | ", parts)}{suffix}]";
         }
 
         public bool CustomArrowLayout { get; set; } = false;
@@ -172,6 +201,155 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             }
         }
 
+        private static string GetLayoutButtonKey(ClickableComponent button)
+        {
+            return string.Join(
+                "|",
+                button.myID,
+                button.name ?? string.Empty,
+                button.bounds.Width,
+                button.bounds.Height
+            );
+        }
+
+        private static void SaveTargetBounds(
+            Dictionary<string, List<Rectangle>> targetCache,
+            IEnumerable<ClickableComponent?> buttons
+        )
+        {
+            targetCache.Clear();
+            foreach (var group in buttons
+                .Where(button => button != null)
+                .Cast<ClickableComponent>()
+                .Distinct()
+                .GroupBy(GetLayoutButtonKey))
+            {
+                targetCache[group.Key] = group
+                    .OrderBy(button => button.bounds.Y)
+                    .ThenBy(button => button.bounds.X)
+                    .Select(button => button.bounds)
+                    .ToList();
+            }
+        }
+
+        private static bool ApplyTargetBounds(
+            Dictionary<string, List<Rectangle>> targetCache,
+            IEnumerable<ClickableComponent?> buttons
+        )
+        {
+            if (targetCache.Count == 0)
+                return false;
+
+            bool matchedAny = false;
+            foreach (var group in buttons
+                .Where(button => button != null)
+                .Cast<ClickableComponent>()
+                .Distinct()
+                .GroupBy(GetLayoutButtonKey))
+            {
+                if (!targetCache.TryGetValue(group.Key, out var targets) || targets.Count == 0)
+                    continue;
+
+                matchedAny = true;
+                var orderedButtons = group
+                    .OrderBy(button => button.bounds.Y)
+                    .ThenBy(button => button.bounds.X)
+                    .ToList();
+                var orderedTargets = targets
+                    .OrderBy(bounds => bounds.Y)
+                    .ThenBy(bounds => bounds.X)
+                    .ToList();
+
+                int count = Math.Min(orderedButtons.Count, orderedTargets.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    var button = orderedButtons[i];
+                    var target = orderedTargets[i];
+                    if (button.bounds.X == target.X && button.bounds.Y == target.Y)
+                        continue;
+
+                    button.bounds = new Rectangle(
+                        target.X,
+                        target.Y,
+                        button.bounds.Width,
+                        button.bounds.Height
+                    );
+                }
+            }
+
+            return matchedAny;
+        }
+
+        private int ComputeInventoryPageSideLayoutSignature(
+            List<ClickableComponent> sideButtons,
+            List<ClickableComponent> slots,
+            bool showScrollButtons,
+            int columns,
+            ClickableComponent firstSlot,
+            ClickableComponent lastRowAnchor
+        )
+        {
+            var hash = new HashCode();
+            hash.Add(showScrollButtons);
+            hash.Add(columns);
+            hash.Add(this.Menu.capacity);
+            hash.Add(this.Menu.rows);
+            hash.Add(slots.Count);
+            hash.Add(firstSlot.bounds.X);
+            hash.Add(firstSlot.bounds.Y);
+            hash.Add(lastRowAnchor.bounds.X);
+            hash.Add(lastRowAnchor.bounds.Y);
+            hash.Add(lastRowAnchor.bounds.Bottom);
+
+            foreach (var button in sideButtons
+                .OrderBy(button => this.OriginalButtonBounds.TryGetValue(button, out Rectangle rect) ? rect.Center.X : button.bounds.Center.X)
+                .ThenBy(button => this.OriginalButtonY.TryGetValue(button, out int y) ? y : button.bounds.Y)
+                .ThenBy(GetLayoutButtonKey))
+            {
+                hash.Add(GetLayoutButtonKey(button));
+                hash.Add(button.bounds.Width);
+                hash.Add(button.bounds.Height);
+                int originalCenterX = this.OriginalButtonBounds.TryGetValue(button, out Rectangle rect)
+                    ? rect.Center.X
+                    : button.bounds.Center.X;
+                hash.Add(originalCenterX / 8);
+            }
+
+            return hash.ToHashCode();
+        }
+
+        public bool HasCachedSideButtonTargets => this.LastSideButtonTargets.Count > 0;
+
+        public Dictionary<string, List<Rectangle>> ExportSideButtonTargets()
+        {
+            return this.LastSideButtonTargets.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.ToList()
+            );
+        }
+
+        public void ImportSideButtonTargets(Dictionary<string, List<Rectangle>> targets)
+        {
+            this.LastSideButtonTargets.Clear();
+            foreach (var pair in targets)
+                this.LastSideButtonTargets[pair.Key] = pair.Value.ToList();
+        }
+
+        public bool ApplyCachedSideButtonTargets(IClickableMenu menu, string reason = "manual")
+        {
+            if (menu.allClickableComponents == null || menu.allClickableComponents.Count == 0)
+            {
+                LayoutDiagnostics.DebugChanged($"SideLayoutCache:skip:{menu.GetType().Name}:{reason}", $"[FIV/SideLayoutCache] skip apply cached targets: menu={menu.GetType().Name}, reason={reason}, no clickable components, targets={this.LastSideButtonTargets.Count}");
+                return false;
+            }
+
+            bool applied = ApplyTargetBounds(this.LastSideButtonTargets, menu.allClickableComponents);
+            if (applied)
+                this.HasResolvedCustomLayout = true;
+            LayoutDiagnostics.DebugChanged($"SideLayoutCache:apply:{menu.GetType().Name}:{reason}", $"[FIV/SideLayoutCache] apply cached targets: menu={menu.GetType().Name}, reason={reason}, components={menu.allClickableComponents.Count}, targetKeys={this.LastSideButtonTargets.Count}, applied={applied}");
+            return applied;
+        }
+
         public void LayoutInventoryPageButtons(
             InventoryPage page,
             List<ClickableComponent> slots,
@@ -181,7 +359,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
         {
             this.HasResolvedCustomLayout = true;
             if (slots.Count == 0)
+            {
+                LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:skip:no-slots", "[FIV/InventoryPageSideLayout] skip: no slots");
                 return;
+            }
+
+            LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:start", $"[FIV/InventoryPageSideLayout] start: rows={this.Menu.rows}, capacity={this.Menu.capacity}, slots={slots.Count}, scrollRow={this.ScrollRow}, showScroll={showScrollButtons}, organize={DescribeComponent(organizeButton)}");
 
             ClickableComponent firstSlot = slots[0];
             int columns = this.Menu.capacity / this.Menu.rows;
@@ -250,8 +433,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 sideButtons.Add(organizeButton);
 
             sideButtons = sideButtons.Distinct().ToList();
+            LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:candidates", $"[FIV/InventoryPageSideLayout] candidates: {DescribeButtons(sideButtons)}, firstSlot={DescribeComponent(firstSlot)}, lastRowAnchor={DescribeComponent(lastRowAnchor)}, sideBandX={sideMinX}..{sideMaxX}, sideBandY={sideMinY}..{sideMaxY}");
             if (sideButtons.Count == 0)
+            {
+                LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:skip:no-candidates", "[FIV/InventoryPageSideLayout] skip: no side button candidates");
                 return;
+            }
 
             foreach (var b in sideButtons)
             {
@@ -261,9 +448,34 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                     this.OriginalButtonY[b] = b.bounds.Y;
             }
 
+            int layoutSignature = this.ComputeInventoryPageSideLayoutSignature(
+                sideButtons,
+                slots,
+                showScrollButtons,
+                columns,
+                firstSlot,
+                lastRowAnchor
+            );
+            if (layoutSignature == this.LastInventoryPageSideLayoutSignature)
+            {
+                bool appliedCachedTargets = ApplyTargetBounds(this.LastInventoryPageButtonTargets, sideButtons);
+                LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:signature-hit", $"[FIV/InventoryPageSideLayout] signature hit: signature={layoutSignature}, appliedCachedTargets={appliedCachedTargets}, buttons={sideButtons.Count}");
+                if (appliedCachedTargets)
+                    return;
+            }
+            else
+            {
+                Log.Debug($"[FIV/InventoryPageSideLayout] signature miss: old={this.LastInventoryPageSideLayoutSignature}, new={layoutSignature}, buttons={sideButtons.Count}");
+            }
+
             var sideColumns = GroupButtonsByOriginalColumn(sideButtons);
             if (sideColumns.Count == 0)
+            {
+                LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:skip:no-columns", "[FIV/InventoryPageSideLayout] skip: grouping produced zero columns");
                 return;
+            }
+
+            LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:columns", $"[FIV/InventoryPageSideLayout] grouped columns={sideColumns.Count}: {string.Join("; ", sideColumns.Select((column, index) => $"col{index}={DescribeButtons(column, 5)}"))}");
 
             int startY = showScrollButtons
                 ? this.UpArrow.bounds.Bottom + 16
@@ -274,41 +486,117 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             int availableHeight = endY - startY;
             int spacing = 8;
 
-            foreach (var column in sideColumns)
+            var orderedColumns = sideColumns
+                .Where(c => c.Count > 0)
+                .OrderBy(c => c.Average(b =>
+                    this.OriginalButtonBounds.TryGetValue(b, out Rectangle rect)
+                        ? rect.Center.X
+                        : b.bounds.Center.X
+                ))
+                .ToList();
+
+            if (orderedColumns.Count == 0)
+                return;
+
+            List<ClickableComponent> primaryColumn = organizeButton != null
+                ? orderedColumns.FirstOrDefault(c => c.Contains(organizeButton)) ?? orderedColumns[0]
+                : orderedColumns[0];
+
+            var primaryButtons = BuildInventoryPageColumnOrder(primaryColumn, organizeButton);
+            if (primaryButtons.Count == 0)
             {
-                var columnButtons = column
-                    .Distinct()
-                    .OrderBy(b => this.OriginalButtonY.TryGetValue(b, out int y) ? y : b.bounds.Y)
-                    .ToList();
+                LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:skip:no-primary", "[FIV/InventoryPageSideLayout] skip: primary column has no buttons");
+                return;
+            }
+
+            LayoutDiagnostics.DebugChanged("InventoryPageSideLayout:area", $"[FIV/InventoryPageSideLayout] layout area: startY={startY}, endY={endY}, available={availableHeight}, primary={DescribeButtons(primaryButtons)}");
+
+            int primaryTotalHeight = primaryButtons.Sum(b => b.bounds.Height);
+            int primaryStackHeight = primaryTotalHeight + (spacing * (primaryButtons.Count - 1));
+            int primaryY = startY + (availableHeight - primaryStackHeight) / 2;
+            var rowY = new List<int>();
+            int primaryCenterX = organizeButton != null && primaryButtons.Contains(organizeButton)
+                ? anchorCenterX
+                : GetOriginalColumnCenterX(primaryButtons);
+
+            foreach (var b in primaryButtons)
+            {
+                b.bounds.X = primaryCenterX - (b.bounds.Width / 2);
+                b.bounds.Y = primaryY;
+                rowY.Add(primaryY);
+                primaryY += b.bounds.Height + spacing;
+            }
+
+            foreach (var column in orderedColumns)
+            {
+                if (ReferenceEquals(column, primaryColumn))
+                    continue;
+
+                var columnButtons = BuildInventoryPageColumnOrder(column, organizeButton);
                 if (columnButtons.Count == 0)
                     continue;
 
-                bool isPrimaryColumn = organizeButton != null && columnButtons.Contains(organizeButton);
-                if (isPrimaryColumn)
+                int columnCenterX = GetOriginalColumnCenterX(columnButtons);
+
+                // Treat side buttons as a real grid. Secondary columns do not get their own
+                // independent vertical centering, because that makes row 1/2/3 drift out of
+                // alignment. Instead they are aligned to the primary column's row Y values.
+                int startRow = Math.Max(0, (rowY.Count - columnButtons.Count + 1) / 2);
+                for (int i = 0; i < columnButtons.Count; i++)
                 {
-                    columnButtons.Remove(organizeButton!);
-                    columnButtons.Insert(columnButtons.Count / 2, organizeButton!);
-                }
+                    var b = columnButtons[i];
+                    int targetY;
+                    int rowIndex = startRow + i;
+                    if (rowIndex >= 0 && rowIndex < rowY.Count)
+                    {
+                        targetY = rowY[rowIndex];
+                    }
+                    else if (rowY.Count > 0)
+                    {
+                        int pitch = b.bounds.Height + spacing;
+                        targetY = rowY[^1] + pitch * (rowIndex - rowY.Count + 1);
+                    }
+                    else
+                    {
+                        targetY = startY;
+                    }
 
-                int columnCenterX = isPrimaryColumn
-                    ? anchorCenterX
-                    : (int)Math.Round(columnButtons.Average(b =>
-                        this.OriginalButtonBounds.TryGetValue(b, out Rectangle rect)
-                            ? rect.Center.X
-                            : b.bounds.Center.X
-                    ));
-
-                int totalButtonsHeight = columnButtons.Sum(b => b.bounds.Height);
-                int stackHeight = totalButtonsHeight + (spacing * (columnButtons.Count - 1));
-                int currentY = startY + (availableHeight - stackHeight) / 2;
-
-                foreach (var b in columnButtons)
-                {
                     b.bounds.X = columnCenterX - (b.bounds.Width / 2);
-                    b.bounds.Y = currentY;
-                    currentY += b.bounds.Height + spacing;
+                    b.bounds.Y = targetY;
                 }
             }
+
+            this.LastInventoryPageSideLayoutSignature = layoutSignature;
+            SaveTargetBounds(this.LastInventoryPageButtonTargets, sideButtons);
+            Log.Debug($"[FIV/InventoryPageSideLayout] saved targets: signature={layoutSignature}, targets={this.LastInventoryPageButtonTargets.Count}, buttons={DescribeButtons(sideButtons)}");
+        }
+
+        private List<ClickableComponent> BuildInventoryPageColumnOrder(
+            List<ClickableComponent> column,
+            ClickableTextureComponent? organizeButton
+        )
+        {
+            var buttons = column
+                .Distinct()
+                .OrderBy(b => this.OriginalButtonY.TryGetValue(b, out int y) ? y : b.bounds.Y)
+                .ToList();
+
+            if (organizeButton != null && buttons.Contains(organizeButton))
+            {
+                buttons.Remove(organizeButton);
+                buttons.Insert(buttons.Count / 2, organizeButton);
+            }
+
+            return buttons;
+        }
+
+        private int GetOriginalColumnCenterX(List<ClickableComponent> buttons)
+        {
+            return (int)Math.Round(buttons.Average(b =>
+                this.OriginalButtonBounds.TryGetValue(b, out Rectangle rect)
+                    ? rect.Center.X
+                    : b.bounds.Center.X
+            ));
         }
 
         public void LayoutSideButtons(SideButtonLayoutContext context)
@@ -317,6 +605,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             bool preferLeftSide = context.PreferredSide == SideLayoutPreference.Left;
             int preferredOffset = context.PreferredSideOffsetPixels;
             bool showScrollButtons = context.ShowScrollButtons;
+
+            LayoutDiagnostics.DebugChanged($"ChestSideLayout:start:{context.Menu.GetType().Name}", $"[FIV/ChestSideLayout] start: menu={context.Menu.GetType().Name}, preferLeft={preferLeftSide}, offset={preferredOffset}, showScroll={showScrollButtons}, chestSlots={context.ChestSlots.Count}, playerSlots={context.PlayerSlots.Count}, chestColumns={context.ChestColumns}, playerColumns={context.PlayerColumns}, color={DescribeComponent(context.ColorButton)}, fill={DescribeComponent(context.FillButton)}, organize={DescribeComponent(context.OrganizeButton)}, special={DescribeComponent(context.SpecialButton)}, ok={DescribeComponent(context.OkButton)}, trash={DescribeComponent(context.TrashButton)}");
 
             context.Menu.allClickableComponents ??= new List<ClickableComponent>();
             this.SetScrollButtonsClickable(context.Menu, showScrollButtons);
@@ -333,7 +623,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             if (sideAnchorBtn == null)
             {
                 if (!showScrollButtons)
+                {
+                    LayoutDiagnostics.DebugChanged("ChestSideLayout:skip:no-anchor", "[FIV/ChestSideLayout] skip: no side anchor and no scroll buttons");
                     return;
+                }
+
+                LayoutDiagnostics.DebugChanged("ChestSideLayout:fallback:arrows-only", "[FIV/ChestSideLayout] fallback: no side anchor, laying out arrows only");
 
                 int targetX;
                 if (context.ArrowAnchorComponentOverride != null)
@@ -376,6 +671,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
                 var fallbackButtons = new List<ClickableComponent> { this.UpArrow, this.DownArrow };
                 this.UpdateAuxScrollBarVisibility(context, fallbackButtons);
+                SaveTargetBounds(this.LastSideButtonTargets, fallbackButtons);
                 if (context.ArrowAnchorComponentOverride != null)
                 {
                     bool hasIntermediateComponent = fallbackButtons.Any(c =>
@@ -462,6 +758,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             AddIfValidSideButton(chestTopColumn, fillBtn, context);
             AddIfValidSideButton(chestTopColumn, organizeBtn, context);
 
+            LayoutDiagnostics.DebugChanged("ChestSideLayout:top-candidates", $"[FIV/ChestSideLayout] chest top candidates: {DescribeButtons(chestTopColumn)}");
+
             if (organizeBtn == null)
             {
                 organizeBtn = chestTopColumn.FirstOrDefault(c =>
@@ -478,6 +776,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             }
 
             var chestButtonColumns = GroupButtonsByOriginalColumn(chestTopColumn);
+            LayoutDiagnostics.DebugChanged("ChestSideLayout:columns", $"[FIV/ChestSideLayout] chest columns={chestButtonColumns.Count}: {string.Join("; ", chestButtonColumns.Select((column, index) => $"col{index}={DescribeButtons(column, 5)}"))}");
             foreach (var column in chestButtonColumns)
             {
                 int currentChestY = context.ChestSlots[0].bounds.Y;
@@ -593,6 +892,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             }
 
             EnsureArrowAnchorBridge(context, allSideButtons);
+            SaveTargetBounds(this.LastSideButtonTargets, allSideButtons);
+            LayoutDiagnostics.DebugChanged($"ChestSideLayout:saved:{context.Menu.GetType().Name}", $"[FIV/ChestSideLayout] saved targets: allButtons={DescribeButtons(allSideButtons)}, left={leftButtons.Count}, right={rightButtons.Count}, targetKeys={this.LastSideButtonTargets.Count}");
         }
 
         private static void AddIfValidSideButton(
@@ -838,7 +1139,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             int columns = this.Menu.capacity / this.Menu.rows;
             if (columns <= 0)
                 columns = InventoryGridMetrics.DefaultColumnCount;
-            return Math.Max(0, (items.Count + columns - 1) / columns);
+
+            return InventoryGridMetrics.GetRequiredRows(this.GetEffectiveItemCount(items), columns);
+        }
+
+        private int GetEffectiveItemCount(IList<Item> items)
+        {
+            bool isPlayerInventory = ReferenceEquals(items, Game1.player?.Items);
+            return InventoryGridMetrics.GetEffectiveSlotCount(items, isPlayerInventory);
         }
 
         public int GetMaxScrollRow(IList<Item> items)
@@ -861,7 +1169,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public void Draw(SpriteBatch b, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return;
 
             if (!this.CustomArrowLayout && !this.HasResolvedCustomLayout)
@@ -894,7 +1202,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public void PerformHoverAction(int x, int y, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return;
 
             bool canScrollUp = this.CanScroll(items, -1);
@@ -908,7 +1216,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public bool ReceiveLeftClick(int x, int y, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return false;
 
             if (this.UpArrow.containsPoint(x, y))
@@ -948,7 +1256,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public bool ReceiveScrollWheelAction(int direction, IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return false;
 
             int delta =
@@ -965,7 +1273,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public void UpdateGamepad(IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return;
 
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
@@ -987,7 +1295,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public void UpdatePointerInteraction(IList<Item> items)
         {
-            if (items == null || items.Count <= this.Menu.capacity)
+            if (items == null || this.GetEffectiveItemCount(items) <= this.Menu.capacity)
                 return;
             if (!this.IsDraggingAuxScrollBar)
                 return;

@@ -23,7 +23,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Storage
             if (index < 0 || index >= this.items.Count)
                 return;
 
-            this.items[index] = item;
+            // Stardew inventory lists intentionally allow empty/null slots even when the generic type is Item.
+            this.items[index] = item!;
         }
     }
 }

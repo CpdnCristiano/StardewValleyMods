@@ -26,6 +26,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 ref capacity,
                 ref rows,
                 playerInventory,
+                actualInventory,
                 currentParentMenu,
                 isCalledFromMuseum
             );
@@ -36,6 +37,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             ref int capacity,
             ref int rows,
             bool playerInventory,
+            IList<Item>? actualInventory,
             IClickableMenu? currentParentMenu,
             bool isCalledFromMuseum
         )
@@ -47,7 +49,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 return;
             }
 
-            if (Game1.player.maxItems.Value <= InventoryGridMetrics.DefaultMaxItems)
+            if (!InventoryGridMetrics.PlayerHasExpandedInventory(actualInventory))
                 return;
 
             if (currentParentMenu is ItemGrabMenu grabMenu)
@@ -75,7 +77,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                     yPosition -= extraSpace;
                 }
 
-                rows = InventoryGridMetrics.GetPlayerVisibleRows();
+                rows = InventoryGridMetrics.GetPlayerVisibleRows(actualInventory);
                 capacity = rows * InventoryGridMetrics.DefaultColumnCount;
             }
         }

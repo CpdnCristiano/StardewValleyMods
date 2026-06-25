@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using CpdnCristiano.StardewValleyMod.Common.Log;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Diagnostics;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
 using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Collections;
 using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
@@ -24,14 +26,142 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static readonly ConditionalWeakTable<InventoryMenu, GridViewport> GridViewports =
             new();
-        private static readonly ConditionalWeakTable<IClickableMenu, BoxedInt> ChestLayoutHashes =
+        private static readonly ConditionalWeakTable<IClickableMenu, ChestMenuLayoutState> ChestLayoutStates =
             new();
-        private static readonly ConditionalWeakTable<
-            IClickableMenu,
-            MenuCachedFields
-        > MenuFieldsCache = new();
+
+        private sealed class ChestMenuLayoutState
+        {
+            public int LayoutHash { get; set; } = int.MinValue;
+            public int PendingLayoutPasses { get; set; } = 0;
+            public string LastTrigger { get; set; } = "none";
+            public bool IsInsideLayout { get; set; } = false;
+            public int LastPlayerScrollRow { get; set; } = 0;
+            public int LastPlayerMaxScrollRow { get; set; } = 0;
+            public int LastPlayerMenuHash { get; set; } = int.MinValue;
+            public List<InventoryMenu> InventoryMenus { get; set; } = new();
+            public Dictionary<string, List<Rectangle>> SideButtonTargets { get; set; } = new();
+        }
 
         public static IClickableMenu? CurrentParentMenu = null;
+
+        private static string DescribeComponent(ClickableComponent? component)
+        {
+            if (component == null)
+                return "<null>";
+
+            string name = string.IsNullOrWhiteSpace(component.name) ? "<no-name>" : component.name;
+            Rectangle bounds = component.bounds;
+            return $"id={component.myID}, name={name}, x={bounds.X}, y={bounds.Y}, w={bounds.Width}, h={bounds.Height}";
+        }
+
+        internal static void NotifyMenuOpened(IClickableMenu menu)
+        {
+            NotifyMenuChanged(null, menu);
+        }
+
+        internal static void NotifyMenuChanged(IClickableMenu? oldMenu, IClickableMenu newMenu)
+        {
+            if (!IsSideLayoutMenu(newMenu))
+                return;
+
+            bool inheritedState = TryInheritChestLayoutState(newMenu, oldMenu, "MenuChanged");
+            ScheduleChestLayout(newMenu, "MenuChanged", 2, resetHash: !inheritedState);
+            RepositionAndWireSideButtons(newMenu, "MenuChanged", force: true);
+        }
+
+        private static bool IsSideLayoutMenu(IClickableMenu menu)
+        {
+            return menu is ItemGrabMenu or ShopMenu or MenuWithInventory or MuseumMenu;
+        }
+
+        private static ChestMenuLayoutState GetChestLayoutState(IClickableMenu menu)
+        {
+            return ChestLayoutStates.GetValue(menu, _ => new ChestMenuLayoutState());
+        }
+
+        private static bool TryInheritChestLayoutState(
+            IClickableMenu targetMenu,
+            IClickableMenu? sourceMenu,
+            string reason
+        )
+        {
+            if (!IsSideLayoutMenu(targetMenu))
+                return false;
+
+            var targetState = GetChestLayoutState(targetMenu);
+            if (targetState.SideButtonTargets.Count > 0 || targetState.LastPlayerScrollRow > 0)
+                return true;
+
+            if (sourceMenu == null || ReferenceEquals(sourceMenu, targetMenu))
+                return false;
+
+            if (!IsSideLayoutMenu(sourceMenu))
+                return false;
+
+            if (!ChestLayoutStates.TryGetValue(sourceMenu, out var sourceState))
+                return false;
+
+            CopyChestLayoutState(sourceState, targetState);
+            Log.Debug(
+                $"[FIV/ChestLifecycle] inherited layout state: reason={reason}, oldMenu={sourceMenu.GetType().Name}#{sourceMenu.GetHashCode()}, newMenu={targetMenu.GetType().Name}#{targetMenu.GetHashCode()}, scrollRow={targetState.LastPlayerScrollRow}, maxScroll={targetState.LastPlayerMaxScrollRow}, targetKeys={targetState.SideButtonTargets.Count}, layoutHash={targetState.LayoutHash}"
+            );
+            return true;
+        }
+
+        private static bool TryInheritChestLayoutStateFromActiveMenu(IClickableMenu targetMenu, string reason)
+        {
+            IClickableMenu? active = Game1.activeClickableMenu;
+            if (active == null || ReferenceEquals(active, targetMenu))
+                return false;
+
+            // During `new ItemGrabMenu(oldMenu)` the new menu calls populateClickableComponentList
+            // before Game1.activeClickableMenu is swapped. That is the only chance to give the
+            // new nested player InventoryMenu the old scroll row/cache before it draws at row 0.
+            return TryInheritChestLayoutState(targetMenu, active, reason);
+        }
+
+        private static void CopyChestLayoutState(ChestMenuLayoutState source, ChestMenuLayoutState target)
+        {
+            target.LayoutHash = source.LayoutHash;
+            target.LastPlayerScrollRow = source.LastPlayerScrollRow;
+            target.LastPlayerMaxScrollRow = source.LastPlayerMaxScrollRow;
+            target.LastPlayerMenuHash = source.LastPlayerMenuHash;
+            target.LastTrigger = source.LastTrigger;
+            target.SideButtonTargets = source.SideButtonTargets.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.ToList()
+            );
+        }
+
+        private static void ScheduleChestLayout(
+            IClickableMenu menu,
+            string trigger,
+            int passes = 1,
+            bool resetHash = false
+        )
+        {
+            if (!IsSideLayoutMenu(menu))
+                return;
+
+            var state = GetChestLayoutState(menu);
+            state.PendingLayoutPasses = Math.Max(state.PendingLayoutPasses, passes);
+            state.LastTrigger = trigger;
+            if (resetHash)
+                state.LayoutHash = int.MinValue;
+
+            LayoutDiagnostics.DebugChanged(
+                $"ChestLifecycle:schedule:{menu.GetHashCode()}:{trigger}",
+                $"[FIV/ChestLifecycle] schedule layout: menu={menu.GetType().Name}, trigger={trigger}, passes={state.PendingLayoutPasses}, resetHash={resetHash}"
+            );
+        }
+
+        private static List<InventoryMenu> GetKnownInventoryMenus(IClickableMenu menu)
+        {
+            if (IsSideLayoutMenu(menu) && ChestLayoutStates.TryGetValue(menu, out var state) && state.InventoryMenus.Count > 0)
+                return state.InventoryMenus;
+
+            return MenuComponentFinder.FindInventoryMenus(menu);
+        }
 
         public static int GetExtraHeight()
         {
@@ -468,6 +598,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance is InventoryPage page)
             {
                 EnsureScrollButtons(page);
+                return;
+            }
+
+            if (IsSideLayoutMenu(__instance))
+            {
+                TryInheritChestLayoutStateFromActiveMenu(__instance, "populateClickableComponentList");
+                ScheduleChestLayout(__instance, "populateClickableComponentList", 2);
+                RepositionAndWireSideButtons(__instance, "populateClickableComponentList", force: true);
             }
         }
 
@@ -731,13 +869,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
                         if (upArrow != null && ReferenceEquals(comp, upArrow))
                         {
-                            // InventoryPage: the up-arrow has no component above it. Pressing up
-                            // here must stop instead of wrapping/descending into another button.
+                            // InventoryPage: vertical movement stays inside the side column, but
+                            // horizontal movement is resolved by geometry. This makes the top
+                            // right visible slot (normally slot 11) reach the up-arrow without
+                            // hardcoding slot IDs.
                             comp.upNeighborID = -1;
                             var firstLogical = logicalColumn.FirstOrDefault();
                             comp.downNeighborID = firstLogical != null ? firstLogical.myID : -1;
-                            comp.leftNeighborID = -1;
+                            var closestSlot = FindClosestByGeometry(
+                                rightmostSlots,
+                                comp.bounds.Center.X,
+                                comp.bounds.Center.Y,
+                                requireLeftOfSource: true
+                            );
+                            comp.leftNeighborID = closestSlot != null ? closestSlot.myID : -1;
                             comp.rightNeighborID = -1;
+                            if (closestSlot != null)
+                                closestSlot.rightNeighborID = comp.myID;
                             continue;
                         }
 
@@ -748,8 +896,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                             // InventoryPage: pressing DOWN on the down-arrow must reach the trash can.
                             // The arrow's own action still scrolls when pressing A; this is only directional navigation.
                             comp.downNeighborID = page.trashCan != null ? page.trashCan.myID : -1;
-                            comp.leftNeighborID = -1;
+                            var closestSlot = FindClosestByGeometry(
+                                rightmostSlots,
+                                comp.bounds.Center.X,
+                                comp.bounds.Center.Y,
+                                requireLeftOfSource: true
+                            );
+                            comp.leftNeighborID = closestSlot != null ? closestSlot.myID : -1;
                             comp.rightNeighborID = -1;
+                            if (closestSlot != null)
+                                closestSlot.rightNeighborID = comp.myID;
                             if (page.trashCan != null)
                                 page.trashCan.upNeighborID = comp.myID;
                             continue;
@@ -789,7 +945,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         }
                         else
                         {
-                            var closestSlot = FindClosestByY(rightmostSlots, comp.bounds.Center.Y);
+                            var closestSlot = FindClosestByGeometry(
+                                rightmostSlots,
+                                comp.bounds.Center.X,
+                                comp.bounds.Center.Y,
+                                requireLeftOfSource: true
+                            );
                             if (closestSlot != null)
                                 comp.leftNeighborID = closestSlot.myID;
                         }
@@ -803,15 +964,32 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     }
                 }
 
-                var primaryRightColumn = nonArrowColumns[0].Count > 0
-                    ? nonArrowColumns[0]
-                    : rightColumns[0];
+                var primaryRightColumn = rightColumns[0]
+                    .Where(c => c != page.trashCan)
+                    .ToList();
+                if (primaryRightColumn.Count == 0)
+                {
+                    primaryRightColumn = nonArrowColumns[0].Count > 0
+                        ? nonArrowColumns[0]
+                        : rightColumns[0];
+                }
+
                 foreach (var slot in rightmostSlots)
                 {
-                    var closestRightComp = FindClosestByY(primaryRightColumn, slot.bounds.Center.Y);
+                    var closestRightComp = FindClosestByGeometry(
+                        primaryRightColumn,
+                        slot.bounds.Center.X,
+                        slot.bounds.Center.Y,
+                        requireRightOfSource: true
+                    );
                     if (closestRightComp != null)
                         slot.rightNeighborID = closestRightComp.myID;
                 }
+
+                LayoutDiagnostics.DebugChanged(
+                    $"InventoryPageNav:arrow-links:{inventoryMenu.GetHashCode()}",
+                    $"[FIV/InventoryPageNav] geometry links: up={DescribeComponent(upArrow)}, up.left={DescribeComponent(FindComponentById(activeComponents, upArrow?.leftNeighborID ?? -1))}, down={DescribeComponent(downArrow)}, down.left={DescribeComponent(FindComponentById(activeComponents, downArrow?.leftNeighborID ?? -1))}, rightEdgeSlots={rightmostSlots.Count}, primaryRight={string.Join(",", primaryRightColumn.Select(c => c.myID))}"
+                );
             }
 
             // 5. Corrigir navegação vertical entre as linhas do inventário e os componentes de baixo
@@ -989,6 +1167,53 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return grid != null && (component == grid.UpArrow || component == grid.DownArrow);
         }
 
+        private static ClickableComponent? FindComponentById(
+            IEnumerable<ClickableComponent> components,
+            int id
+        )
+        {
+            if (id == -1)
+                return null;
+
+            return components.FirstOrDefault(c => c != null && c.myID == id);
+        }
+
+        private static ClickableComponent? FindClosestByGeometry(
+            IEnumerable<ClickableComponent> components,
+            int sourceCenterX,
+            int sourceCenterY,
+            bool requireLeftOfSource = false,
+            bool requireRightOfSource = false
+        )
+        {
+            ClickableComponent? best = null;
+            long bestScore = long.MaxValue;
+
+            foreach (var component in components)
+            {
+                if (component == null)
+                    continue;
+
+                int centerX = component.bounds.Center.X;
+                int centerY = component.bounds.Center.Y;
+                if (requireLeftOfSource && centerX >= sourceCenterX)
+                    continue;
+                if (requireRightOfSource && centerX <= sourceCenterX)
+                    continue;
+
+                int dx = Math.Abs(centerX - sourceCenterX);
+                int dy = Math.Abs(centerY - sourceCenterY);
+                long score = ((long)dy * dy * 4L) + ((long)dx * dx);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = component;
+                }
+            }
+
+            return best;
+        }
+
         private static ClickableComponent? PickSameLogicalRow(
             List<ClickableComponent> column,
             int logicalIndex,
@@ -1063,16 +1288,46 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void IClickableMenuUpdatePositionPostfix(IClickableMenu __instance)
         {
-            if (__instance is ItemGrabMenu or ShopMenu or MenuWithInventory or MuseumMenu)
+            if (IsSideLayoutMenu(__instance))
             {
-                RepositionAndWireSideButtons(__instance);
+                ScheduleChestLayout(__instance, "updatePosition", 1);
+                RepositionAndWireSideButtons(__instance, "updatePosition", force: true);
             }
         }
 
-        private static void RepositionAndWireSideButtons(IClickableMenu menu)
+        private static void RepositionAndWireSideButtons(
+            IClickableMenu menu,
+            string reason = "manual",
+            bool force = false
+        )
         {
-            if (menu == null)
+            if (menu == null || !IsSideLayoutMenu(menu))
                 return;
+
+            var state = GetChestLayoutState(menu);
+            if (state.IsInsideLayout)
+                return;
+
+            state.IsInsideLayout = true;
+            try
+            {
+                RepositionAndWireSideButtonsCore(menu, state, reason, force);
+            }
+            finally
+            {
+                state.IsInsideLayout = false;
+            }
+        }
+
+        private static void RepositionAndWireSideButtonsCore(
+            IClickableMenu menu,
+            ChestMenuLayoutState state,
+            string reason,
+            bool force
+        )
+        {
+            LayoutDiagnostics.DebugChanged($"SideLayout:entry:{menu.GetHashCode()}:{reason}", $"[FIV/SideLayout] entry: menu={menu.GetType().FullName}, reason={reason}, force={force}, components={menu.allClickableComponents?.Count ?? 0}");
+
             if (menu is ShopMenu shopMenu)
             {
                 InventoryMenuLayoutHelpers.AdjustShopMenuScrollLayout(
@@ -1082,6 +1337,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
 
             var menus = MenuComponentFinder.FindInventoryMenus(menu);
+            LayoutDiagnostics.DebugChanged($"SideLayout:menus:{menu.GetType().FullName}", $"[FIV/SideLayout] found inventory menus: count={menus.Count}");
             if (menus.Count == 0)
                 return;
             var orderedMenus = menus
@@ -1092,6 +1348,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 return;
 
             var chestMenu = orderedMenus.First();
+            state.InventoryMenus = orderedMenus;
+
             var playerMenu = orderedMenus.Last();
             var chestSlots = chestMenu.inventory;
             var playerSlots = playerMenu.inventory;
@@ -1101,7 +1359,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 || playerSlots == null
                 || playerSlots.Count == 0
             )
+            {
+                LayoutDiagnostics.DebugChanged($"SideLayout:skip:slots:{menu.GetType().FullName}", "[FIV/SideLayout] skip: missing chest/player slots");
                 return;
+            }
+
+            LayoutDiagnostics.DebugChanged($"SideLayout:slots:{menu.GetType().FullName}", $"[FIV/SideLayout] slots: chestCount={chestSlots.Count}, chestRows={chestMenu.rows}, chestCapacity={chestMenu.capacity}, chestTop=({chestSlots[0].bounds.X},{chestSlots[0].bounds.Y}); playerCount={playerSlots.Count}, playerRows={playerMenu.rows}, playerCapacity={playerMenu.capacity}, playerTop=({playerSlots[0].bounds.X},{playerSlots[0].bounds.Y})");
 
             int chestColumns = chestMenu.capacity / chestMenu.rows;
             if (chestColumns <= 0)
@@ -1114,84 +1377,31 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             playerGrid.CustomArrowLayout = true;
             playerGrid.UpArrow.myID = ArrowIdUp;
             playerGrid.DownArrow.myID = ArrowIdDown;
-            bool showScrollButtons = playerGrid.FullInventory != null
-                && playerGrid.FullInventory.Count > playerMenu.capacity;
+            RestoreChestPlayerScroll(state, playerGrid, playerMenu, reason);
+            IList<Item>? playerSource = RefreshInventorySource(playerMenu, playerGrid);
+            bool isPlayerSource = playerSource != null && ReferenceEquals(playerSource, Game1.player?.Items);
+            int effectivePlayerSlots = InventoryGridMetrics.GetEffectiveSlotCount(playerSource, isPlayerSource);
+            bool showScrollButtons = effectivePlayerSlots > playerMenu.capacity;
+            RememberChestPlayerScroll(state, playerGrid, playerMenu, playerSource);
+            LayoutDiagnostics.DebugChanged($"SideLayout:scroll-decision:{menu.GetHashCode()}", $"[FIV/SideLayout] player grid scroll decision: menu={menu.GetType().Name}, fullInventory={playerSource?.Count ?? -1}, effectiveSlots={effectivePlayerSlots}, playerCapacity={playerMenu.capacity}, showScroll={showScrollButtons}, scrollRow={playerGrid.ScrollRow}");
             playerGrid.SetScrollButtonsClickable(menu, showScrollButtons);
 
-            var fields = MenuFieldsCache.GetValue(
-                menu,
-                m =>
-                {
-                    var cBtn = MenuComponentFinder.FindFieldContaining(
-                        m,
-                        "colorPickerToggleButton"
-                    );
-                    var fBtn = MenuComponentFinder.FindFieldContaining(
-                        m,
-                        "fillStacksButton"
-                    );
-                    var oBtn =
-                        MenuComponentFinder.FindFieldContaining(m, "organizeButton")
-                        ?? MenuComponentFinder.FindFieldContaining(
-                            m,
-                            "organizeStashButton"
-                        );
-                    var oK = MenuComponentFinder.FindFieldContaining(m, "okButton");
-                    var sBtn = MenuComponentFinder.FindFieldContaining(m, "specialButton");
-                    var tBtn = MenuComponentFinder.FindFieldContaining(m, "trashCan");
+            if (!playerGrid.HasCachedSideButtonTargets && state.SideButtonTargets.Count > 0)
+            {
+                playerGrid.ImportSideButtonTargets(state.SideButtonTargets);
+                LayoutDiagnostics.DebugChanged(
+                    $"SideLayoutCache:import:{menu.GetHashCode()}",
+                    $"[FIV/SideLayoutCache] imported parent cache into player grid: menu={menu.GetType().Name}, targetKeys={state.SideButtonTargets.Count}, playerMenuHash={playerMenu.GetHashCode()}"
+                );
+            }
 
-                    if (
-                        cBtn != null
-                        && (cBtn == m.upperRightCloseButton || cBtn.name == "upperRightCloseButton")
-                    )
-                        cBtn = null;
-                    if (
-                        fBtn != null
-                        && (fBtn == m.upperRightCloseButton || fBtn.name == "upperRightCloseButton")
-                    )
-                        fBtn = null;
-                    if (
-                        oBtn != null
-                        && (oBtn == m.upperRightCloseButton || oBtn.name == "upperRightCloseButton")
-                    )
-                        oBtn = null;
-                    if (
-                        oK != null
-                        && (oK == m.upperRightCloseButton || oK.name == "upperRightCloseButton")
-                    )
-                        oK = null;
-                    if (
-                        sBtn != null
-                        && (sBtn == m.upperRightCloseButton || sBtn.name == "upperRightCloseButton")
-                    )
-                        sBtn = null;
-                    if (
-                        tBtn != null
-                        && (tBtn == m.upperRightCloseButton || tBtn.name == "upperRightCloseButton")
-                    )
-                        tBtn = null;
-
-                    var cPicker = MenuComponentFinder.FindColorPicker(m);
-                    var pToggle =
-                        cPicker != null
-                            ? MenuComponentFinder.FindColorPickerToggleButton(cPicker)
-                            : null;
-                    if (cBtn == null && pToggle != null)
-                        cBtn = pToggle;
-
-                    return new MenuCachedFields
-                    {
-                        ColorBtn = cBtn,
-                        FillBtn = fBtn,
-                        OrganizeBtn = oBtn,
-                        SpecialBtn = sBtn,
-                        OkBtn = oK,
-                        TrashBtn = tBtn,
-                        ColorPicker = cPicker,
-                        PickerToggle = pToggle,
-                    };
-                }
-            );
+            var fields = BuildMenuCachedFields(menu);
+            if (playerGrid.HasCachedSideButtonTargets)
+            {
+                bool earlyApplied = playerGrid.ApplyCachedSideButtonTargets(menu, $"prehash:{reason}");
+                if (earlyApplied)
+                    fields = BuildMenuCachedFields(menu);
+            }
 
             var colorBtn = fields.ColorBtn;
             var fillBtn = fields.FillBtn;
@@ -1201,6 +1411,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var trashBtn = fields.TrashBtn;
             var pickerToggle = fields.PickerToggle;
             var colorPicker = fields.ColorPicker;
+            LayoutDiagnostics.DebugChanged($"SideLayout:fields:{menu.GetType().FullName}", $"[FIV/SideLayout] fields: color={DescribeComponent(colorBtn)}, fill={DescribeComponent(fillBtn)}, organize={DescribeComponent(organizeBtn)}, special={DescribeComponent(specialBtn)}, ok={DescribeComponent(okBtn)}, trash={DescribeComponent(trashBtn)}, pickerToggle={DescribeComponent(pickerToggle)}");
             var preferredSide = InventoryMenuLayoutHelpers.GetPreferredSide(menu);
             int preferredSideOffsetPixels =
                 InventoryMenuLayoutHelpers.GetPreferredSideOffsetPixels(menu);
@@ -1220,17 +1431,31 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 trashBtn,
                 chestSlots,
                 playerSlots,
-                showScrollButtons,
-                menu.allClickableComponents?.Count ?? 0
+                showScrollButtons
             );
+
+            LayoutDiagnostics.DebugChanged($"SideLayout:computed:{menu.GetType().FullName}", $"[FIV/SideLayout] computed hash={layoutHash}, anchorCenterX={anchorCenterX}, preferredSide={preferredSide}, preferredOffset={preferredSideOffsetPixels}, showScroll={showScrollButtons}");
 
             // Keep the vanilla drop-item target reachable even when the side-column layout
             // did not change this frame. Other mods and populateClickableComponentList can
             // rebuild neighbors after our last layout pass.
             MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
 
-            if (!UpdateCachedLayoutHash(menu, layoutHash))
-                return;
+            bool layoutChanged = UpdateCachedLayoutHash(state, menu, layoutHash);
+            if (!layoutChanged)
+            {
+                bool applied = playerGrid.ApplyCachedSideButtonTargets(menu, $"cache-hit:{reason}");
+                LayoutDiagnostics.DebugChanged($"SideLayout:cache-hit:{menu.GetHashCode()}", $"[FIV/SideLayout] cache hit: menu={menu.GetType().Name}, reason={reason}, appliedCachedTargets={applied}, force={force}, hash={layoutHash}");
+                if (applied || !force)
+                {
+                    MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
+                    return;
+                }
+            }
+            else
+            {
+                Log.Debug($"[FIV/SideLayout] cache miss: menu={menu.GetType().Name}, reason={reason}, relayout=true, hash={layoutHash}");
+            }
 
             playerGrid.LayoutSideButtons(
                 new GridViewport.SideButtonLayoutContext
@@ -1259,20 +1484,124 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     ShowScrollButtons = showScrollButtons,
                 }
             );
+            state.SideButtonTargets = playerGrid.ExportSideButtonTargets();
 
             MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
         }
 
-        private static bool UpdateCachedLayoutHash(IClickableMenu menu, int hash)
+        private static MenuCachedFields BuildMenuCachedFields(IClickableMenu menu)
         {
-            var cached = ChestLayoutHashes.GetValue(menu, _ => new BoxedInt(int.MinValue));
-            if (cached.Value == hash)
+            var cBtn = MenuComponentFinder.FindFieldContaining(
+                menu,
+                "colorPickerToggleButton"
+            );
+            var fBtn = MenuComponentFinder.FindFieldContaining(
+                menu,
+                "fillStacksButton"
+            );
+            var oBtn =
+                MenuComponentFinder.FindFieldContaining(menu, "organizeButton")
+                ?? MenuComponentFinder.FindFieldContaining(
+                    menu,
+                    "organizeStashButton"
+                );
+            var oK = MenuComponentFinder.FindFieldContaining(menu, "okButton");
+            var sBtn = MenuComponentFinder.FindFieldContaining(menu, "specialButton");
+            var tBtn = MenuComponentFinder.FindFieldContaining(menu, "trashCan");
+
+            if (
+                cBtn != null
+                && (cBtn == menu.upperRightCloseButton || cBtn.name == "upperRightCloseButton")
+            )
+                cBtn = null;
+            if (
+                fBtn != null
+                && (fBtn == menu.upperRightCloseButton || fBtn.name == "upperRightCloseButton")
+            )
+                fBtn = null;
+            if (
+                oBtn != null
+                && (oBtn == menu.upperRightCloseButton || oBtn.name == "upperRightCloseButton")
+            )
+                oBtn = null;
+            if (
+                oK != null
+                && (oK == menu.upperRightCloseButton || oK.name == "upperRightCloseButton")
+            )
+                oK = null;
+            if (
+                sBtn != null
+                && (sBtn == menu.upperRightCloseButton || sBtn.name == "upperRightCloseButton")
+            )
+                sBtn = null;
+            if (
+                tBtn != null
+                && (tBtn == menu.upperRightCloseButton || tBtn.name == "upperRightCloseButton")
+            )
+                tBtn = null;
+
+            var cPicker = MenuComponentFinder.FindColorPicker(menu);
+            var pToggle =
+                cPicker != null
+                    ? MenuComponentFinder.FindColorPickerToggleButton(cPicker)
+                    : null;
+            if (cBtn == null && pToggle != null)
+                cBtn = pToggle;
+
+            return new MenuCachedFields
             {
+                ColorBtn = cBtn,
+                FillBtn = fBtn,
+                OrganizeBtn = oBtn,
+                SpecialBtn = sBtn,
+                OkBtn = oK,
+                TrashBtn = tBtn,
+                ColorPicker = cPicker,
+                PickerToggle = pToggle,
+            };
+        }
+
+        private static bool UpdateCachedLayoutHash(ChestMenuLayoutState state, IClickableMenu menu, int hash)
+        {
+            if (state.LayoutHash == hash)
+            {
+                LayoutDiagnostics.DebugChanged($"SideLayoutHash:unchanged:{menu.GetHashCode()}", $"[FIV/SideLayoutHash] unchanged: menu={menu.GetType().Name}, hash={hash}");
                 return false;
             }
 
-            cached.Value = hash;
+            Log.Debug($"[FIV/SideLayoutHash] changed: menu={menu.GetType().Name}, old={state.LayoutHash}, new={hash}");
+            state.LayoutHash = hash;
             return true;
+        }
+
+        private static void RestoreChestPlayerScroll(
+            ChestMenuLayoutState state,
+            GridViewport playerGrid,
+            InventoryMenu playerMenu,
+            string reason
+        )
+        {
+            if (state.LastPlayerScrollRow <= 0 || playerGrid.ScrollRow != 0)
+                return;
+
+            playerGrid.ScrollRow = state.LastPlayerScrollRow;
+            LayoutDiagnostics.DebugChanged(
+                $"ChestScroll:restore:{playerMenu.GetHashCode()}",
+                $"[FIV/ChestScroll] restored player scroll: reason={reason}, menuHash={playerMenu.GetHashCode()}, scrollRow={state.LastPlayerScrollRow}, previousPlayerMenuHash={state.LastPlayerMenuHash}"
+            );
+        }
+
+        private static void RememberChestPlayerScroll(
+            ChestMenuLayoutState state,
+            GridViewport playerGrid,
+            InventoryMenu playerMenu,
+            IList<Item>? playerSource
+        )
+        {
+            int maxScroll = playerSource != null ? playerGrid.GetMaxScrollRow(playerSource) : 0;
+            state.LastPlayerScrollRow = Math.Clamp(playerGrid.ScrollRow, 0, maxScroll);
+            state.LastPlayerMaxScrollRow = maxScroll;
+            state.LastPlayerMenuHash = playerMenu.GetHashCode();
         }
 
         private static int ComputeChestLayoutHash(
@@ -1286,35 +1615,53 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ClickableComponent? trashBtn,
             List<ClickableComponent> chestSlots,
             List<ClickableComponent> playerSlots,
-            bool showScrollButtons,
-            int clickableCount
+            bool showScrollButtons
         )
         {
             var hash = new HashCode();
             hash.Add(anchorCenterX);
-            hash.Add(clickableCount);
             hash.Add(showScrollButtons);
+            hash.Add(chestSlots[0].bounds.X);
             hash.Add(chestSlots[0].bounds.Y);
+            hash.Add(chestSlots.Count);
+            hash.Add(playerSlots[0].bounds.X);
             hash.Add(playerSlots[0].bounds.Y);
             hash.Add(playerSlots[playerSlots.Count - 1].bounds.Y);
-            hash.Add(colorBtn != null ? RuntimeHelpers.GetHashCode(colorBtn) : 0);
-            hash.Add(fillBtn != null ? RuntimeHelpers.GetHashCode(fillBtn) : 0);
-            hash.Add(organizeBtn != null ? RuntimeHelpers.GetHashCode(organizeBtn) : 0);
-            hash.Add(specialBtn != null ? RuntimeHelpers.GetHashCode(specialBtn) : 0);
-            hash.Add(okBtn != null ? RuntimeHelpers.GetHashCode(okBtn) : 0);
-            hash.Add(trashBtn != null ? RuntimeHelpers.GetHashCode(trashBtn) : 0);
+            hash.Add(playerSlots.Count);
+            AddStableButtonShape(ref hash, colorBtn);
+            AddStableButtonShape(ref hash, fillBtn);
+            AddStableButtonShape(ref hash, organizeBtn);
+            AddStableButtonShape(ref hash, specialBtn);
+            AddStableButtonShape(ref hash, okBtn);
+            AddStableButtonShape(ref hash, trashBtn);
 
             foreach (var button in chestTopColumn)
             {
-                hash.Add(RuntimeHelpers.GetHashCode(button));
+                AddStableButtonShape(ref hash, button);
             }
 
             return hash.ToHashCode();
         }
 
+        private static void AddStableButtonShape(ref HashCode hash, ClickableComponent? button)
+        {
+            if (button == null)
+            {
+                hash.Add(0);
+                return;
+            }
+
+            hash.Add(1);
+            hash.Add(button.myID);
+            hash.Add(button.name ?? string.Empty);
+            hash.Add(button.bounds.Width);
+            hash.Add(button.bounds.Height);
+        }
+
         private static void ItemGrabMenuDrawPrefix(ItemGrabMenu __instance, SpriteBatch b)
         {
-            RepositionAndWireSideButtons(__instance);
+            // No per-frame side-button scan here. Chest layout is handled by MenuChanged,
+            // populateClickableComponentList, input triggers, and short pending update passes.
         }
 
         private static void ShopMenuDrawPrefix(ShopMenu __instance, SpriteBatch b)
@@ -1323,17 +1670,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 __instance,
                 StardewMenuFields.ShopMenuScrollBarRunner
             );
-            RepositionAndWireSideButtons(__instance);
         }
 
         private static void MuseumMenuDrawPrefix(MuseumMenu __instance, SpriteBatch b)
         {
-            RepositionAndWireSideButtons(__instance);
+            // No per-frame side-button scan here.
         }
 
         private static void updatePositionPostfix(ShopMenu __instance)
         {
-            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
                 int extraHeight = GetExtraHeight();
                 __instance.yPositionOnScreen -= extraHeight / 2;
@@ -1352,7 +1698,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ref int y
         )
         {
-            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
                 if (__instance is InventoryPage)
                 {
@@ -1387,7 +1733,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance is not (GameMenu or MenuWithInventory or ShopMenu or TailoringMenu))
                 return;
 
-            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
                 if (__instance is GameMenu)
                 {
@@ -1450,7 +1796,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPagePrefix(ref int y, ref int height)
         {
-            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
                 int extraSpace = GetExtraHeight();
                 height += extraSpace;
@@ -1470,7 +1816,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void CraftingPagePrefix(ref int y, ref int height)
         {
-            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
                 int extraSpace = GetExtraHeight();
                 height += extraSpace;
@@ -1504,18 +1850,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (columns <= 0)
                 columns = InventoryGridMetrics.DefaultColumnCount;
 
-            int totalRows = Math.Max(0, (currentInventory.Count + columns - 1) / columns);
+            bool isPlayerInventory = ReferenceEquals(currentInventory, Game1.player.Items);
+            int effectiveSlotCount = InventoryGridMetrics.GetEffectiveSlotCount(
+                currentInventory,
+                isPlayerInventory
+            );
+            int totalRows = InventoryGridMetrics.GetRequiredRows(effectiveSlotCount, columns);
             int maxScrollRow = Math.Max(0, totalRows - __instance.rows);
             gridViewport.ScrollRow = Math.Clamp(gridViewport.ScrollRow, 0, maxScrollRow);
 
-            if (currentInventory.Count <= __instance.capacity)
+            if (effectiveSlotCount <= __instance.capacity)
                 return;
 
             gridViewport.OriginalInventory = currentInventory;
             var scrollableList = new ScrollableInventoryList(
                 currentInventory,
                 gridViewport.ScrollRow * columns,
-                __instance.capacity
+                __instance.capacity,
+                effectiveSlotCount
             );
             StardewMenuFields.ActualInventory.SetValue(__instance, scrollableList);
 
@@ -1553,9 +1905,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return;
             var grid = GridViewports.GetValue(inventoryMenu, m => new GridViewport(m));
-
-            if (!TryGetPageState(page, out GridViewport? stateGrid, create: true) || stateGrid == null)
-                return;
+            RefreshInventorySource(inventoryMenu, grid);
 
             grid.CustomArrowLayout = true;
             grid.UpArrow.myID = ArrowIdUp;
@@ -1597,7 +1947,42 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var organizeButton =
                 StardewMenuFields.InventoryPageOrganizeButton.GetValue(page) as ClickableTextureComponent;
             bool showScrollButtons = InventoryPageShouldShowScrollButtons(page, inventoryMenu, grid);
-            grid.LayoutInventoryPageButtons(page, slots, organizeButton, showScrollButtons);
+            bool shouldLayoutSideButtons = InventoryPageShouldLayoutSideButtons(page, inventoryMenu, grid, showScrollButtons);
+            int effectiveSlots = GetInventoryPageEffectiveSlotCount(inventoryMenu, grid);
+            int requiredRows = GetInventoryPageEffectiveRequiredRows(inventoryMenu, grid);
+            LayoutDiagnostics.DebugChanged("InventoryPage:layout-decision", $"[FIV/InventoryPage] layout decision: rows={inventoryMenu.rows}, capacity={inventoryMenu.capacity}, slotComponents={slots.Count}, effectiveSlots={effectiveSlots}, requiredRows={requiredRows}, scrollRow={grid.ScrollRow}, showScroll={showScrollButtons}, shouldLayoutSideButtons={shouldLayoutSideButtons}, organize={DescribeComponent(organizeButton)}");
+            if (shouldLayoutSideButtons)
+            {
+                grid.LayoutInventoryPageButtons(page, slots, organizeButton, showScrollButtons);
+            }
+        }
+
+        private static bool InventoryPageShouldLayoutSideButtons(
+            InventoryPage page,
+            InventoryMenu inventoryMenu,
+            GridViewport? grid,
+            bool showScrollButtons
+        )
+        {
+            if (showScrollButtons)
+                return true;
+
+            int visibleRows = Math.Max(inventoryMenu.rows, InventoryGridMetrics.DefaultRowCount);
+            if (visibleRows >= 4)
+                return true;
+
+            int requiredRows = GetInventoryPageEffectiveRequiredRows(inventoryMenu, grid);
+            return requiredRows >= 4 && visibleRows >= 4;
+        }
+
+        private static int GetInventoryPageEffectiveRequiredRows(
+            InventoryMenu inventoryMenu,
+            GridViewport? grid
+        )
+        {
+            int columns = InventoryGridMetrics.GetColumns(inventoryMenu.capacity, inventoryMenu.rows);
+            int effectiveSlots = GetInventoryPageEffectiveSlotCount(inventoryMenu, grid);
+            return InventoryGridMetrics.GetRequiredRows(effectiveSlots, columns);
         }
 
         private static bool InventoryPageShouldShowScrollButtons(
@@ -1606,14 +1991,64 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             GridViewport? grid
         )
         {
-            IList<Item>? items = grid?.OriginalInventory ?? grid?.FullInventory;
-            if (items != null)
-                return items.Count > inventoryMenu.capacity;
+            return GetInventoryPageEffectiveSlotCount(inventoryMenu, grid) > inventoryMenu.capacity;
+        }
 
+        private static int GetInventoryPageEffectiveSlotCount(
+            InventoryMenu inventoryMenu,
+            GridViewport? grid
+        )
+        {
+            IList<Item>? source = RefreshInventorySource(inventoryMenu, grid);
+            bool isPlayerInventory = source != null && ReferenceEquals(source, Game1.player?.Items);
+            return InventoryGridMetrics.GetEffectiveSlotCount(source, isPlayerInventory);
+        }
+
+        private static IList<Item>? RefreshInventorySource(InventoryMenu inventoryMenu, GridViewport? grid)
+        {
+            IList<Item>? source = null;
             if (StardewMenuFields.ActualInventory.GetValue(inventoryMenu) is IList<Item> currentInventory)
-                return currentInventory.Count > inventoryMenu.capacity;
+            {
+                source = currentInventory is ScrollableInventoryList scrollable
+                    ? scrollable.Underlying
+                    : currentInventory;
+            }
 
-            return Game1.player != null && Game1.player.maxItems.Value > inventoryMenu.capacity;
+            source ??= grid?.OriginalInventory ?? grid?.FullInventory;
+
+            if (grid != null && source != null)
+            {
+                int oldScrollRow = grid.ScrollRow;
+                grid.FullInventory = source;
+                int columns = InventoryGridMetrics.GetColumns(inventoryMenu.capacity, inventoryMenu.rows);
+                bool isPlayerInventory = ReferenceEquals(source, Game1.player?.Items);
+                int effectiveSlots = InventoryGridMetrics.GetEffectiveSlotCount(source, isPlayerInventory);
+                int totalRows = InventoryGridMetrics.GetRequiredRows(effectiveSlots, columns);
+                int maxScrollRow = Math.Max(0, totalRows - inventoryMenu.rows);
+                grid.ScrollRow = Math.Clamp(grid.ScrollRow, 0, maxScrollRow);
+                if (maxScrollRow == 0)
+                    grid.ScrollRow = 0;
+
+                var sourceHash = new HashCode();
+                sourceHash.Add(inventoryMenu.rows);
+                sourceHash.Add(inventoryMenu.capacity);
+                sourceHash.Add(columns);
+                sourceHash.Add(source.Count);
+                sourceHash.Add(isPlayerInventory);
+                sourceHash.Add(effectiveSlots);
+                sourceHash.Add(totalRows);
+                sourceHash.Add(maxScrollRow);
+                sourceHash.Add(grid.ScrollRow);
+                sourceHash.Add(source.GetType().FullName);
+                int sourceSignature = sourceHash.ToHashCode();
+                if (grid.LastInventorySourceSignature != sourceSignature || oldScrollRow != grid.ScrollRow)
+                {
+                    grid.LastInventorySourceSignature = sourceSignature;
+                    LayoutDiagnostics.DebugChanged($"InventorySource:refresh:{inventoryMenu.GetHashCode()}:{isPlayerInventory}", $"[FIV/InventorySource] refresh: rows={inventoryMenu.rows}, capacity={inventoryMenu.capacity}, columns={columns}, sourceCount={source.Count}, isPlayer={isPlayerInventory}, effectiveSlots={effectiveSlots}, totalRows={totalRows}, maxScroll={maxScrollRow}, scrollRow={oldScrollRow}->{grid.ScrollRow}, sourceType={source.GetType().FullName}");
+                }
+            }
+
+            return source;
         }
 
         private static void SetInventoryPageScrollButtonsClickable(
@@ -1625,6 +2060,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             page.allClickableComponents ??= new List<ClickableComponent>();
             var upArrow = grid.UpArrow;
             var downArrow = grid.DownArrow;
+
+            LayoutDiagnostics.DebugChanged("InventoryPageScrollButtons:set-clickable", $"[FIV/InventoryPageScrollButtons] set clickable: enabled={enabled}, pageComponents={page.allClickableComponents.Count}, up={DescribeComponent(upArrow)}, down={DescribeComponent(downArrow)}");
 
             if (enabled)
             {
@@ -1682,7 +2119,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             if (GridViewports.TryGetValue(inventoryMenu, out var grid) && grid != null)
             {
-                IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                IList<Item>? items = RefreshInventorySource(inventoryMenu, grid);
                 if (
                     items != null
                     && MenuComponentFinder.IsMouseTargetingInventoryArea(
@@ -1709,21 +2146,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 is not InventoryMenu inventoryMenu
             )
                 return;
-            if (!TryGetPageState(inventoryPage, out GridViewport? grid) || grid == null)
-                return;
-
-            // Keep the InventoryPage side-column links current from the first visible frame.
-            // Some mods rebuild/adjust side buttons after construction without changing the
-            // component count, so a count-only hash can leave stale first-frame navigation.
-            LayoutScrollButtons(inventoryPage, grid);
-            if (__instance.allClickableComponents != null)
+            GridViewport? grid = null;
+            if (InventoryGridMetrics.PlayerHasExpandedInventory())
             {
-                WireGamepadNavigation(inventoryPage, __instance.allClickableComponents);
+                grid = GridViewports.GetValue(inventoryMenu, m => new GridViewport(m));
+
+                // Keep the InventoryPage side-column links current from the first visible frame.
+                // Some mods rebuild/adjust side buttons after construction without changing the
+                // component count, so a count-only hash can leave stale first-frame navigation.
+                LayoutScrollButtons(inventoryPage, grid);
+                if (__instance.allClickableComponents != null)
+                {
+                    WireGamepadNavigation(inventoryPage, __instance.allClickableComponents);
+                }
             }
 
             if (GridViewports.TryGetValue(inventoryMenu, out var viewport) && viewport != null)
             {
-                IList<Item>? items = viewport.OriginalInventory ?? viewport.FullInventory;
+                IList<Item>? items = RefreshInventorySource(inventoryMenu, viewport);
                 if (items != null)
                 {
                     viewport.UpdatePointerInteraction(items);
@@ -1747,7 +2187,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             int direction
         )
         {
-            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
+            var menus = GetKnownInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (
@@ -1761,7 +2201,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 {
                     if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                     {
-                        IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                        IList<Item>? items = RefreshInventorySource(menu, grid);
                         if (items != null && grid.ReceiveScrollWheelAction(direction, items))
                         {
                             return false;
@@ -1779,12 +2219,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             bool playSound
         )
         {
-            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
+            if (IsSideLayoutMenu(__instance) && __instance is not ItemGrabMenu)
+                ScheduleChestLayout(__instance, "receiveLeftClick", 1);
+
+            var menus = GetKnownInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                 {
-                    IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                    IList<Item>? items = RefreshInventorySource(menu, grid);
                     if (items != null && grid.ReceiveLeftClick(x, y, items))
                     {
                         return false;
@@ -1796,17 +2239,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void MenuUpdatePostfix(IClickableMenu __instance, GameTime time)
         {
-            if (__instance is ItemGrabMenu or ShopMenu or MenuWithInventory or MuseumMenu)
+            ChestMenuLayoutState? state = null;
+            if (IsSideLayoutMenu(__instance))
             {
-                RepositionAndWireSideButtons(__instance);
+                state = GetChestLayoutState(__instance);
+                if (state.PendingLayoutPasses > 0)
+                {
+                    string reason = $"pending:{state.LastTrigger}";
+                    state.PendingLayoutPasses--;
+                    RepositionAndWireSideButtons(__instance, reason, force: state.PendingLayoutPasses > 0);
+                }
             }
 
-            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
+            var menus = GetKnownInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                 {
-                    IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                    IList<Item>? items = RefreshInventorySource(menu, grid);
                     if (items != null)
                     {
                         grid.UpdatePointerInteraction(items);
@@ -1822,6 +2272,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     {
                         grid.UpdateGamepad(items);
                     }
+
+                    if (state != null && items != null && ReferenceEquals(items, Game1.player?.Items))
+                    {
+                        RememberChestPlayerScroll(state, grid, menu, items);
+                    }
                 }
             }
         }
@@ -1831,6 +2286,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             Buttons button
         )
         {
+            if (__instance is ItemGrabMenu && button is (Buttons.A or Buttons.X or Buttons.Y or Buttons.B))
+            {
+                Log.Debug($"[FIV/ChestInput] gamepad:{button}: menuHash={__instance.GetHashCode()}, snapped={DescribeComponent(__instance.currentlySnappedComponent)}, components={__instance.allClickableComponents?.Count ?? 0}");
+            }
+
             bool isDirectionalButton =
                 button == Buttons.DPadDown
                 || button == Buttons.DPadUp
@@ -1865,7 +2325,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (snapped == null)
                 return true;
 
-            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
+            var menus = GetKnownInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (menu.inventory != null && menu.inventory.Contains(snapped))
@@ -1884,7 +2344,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     {
                         if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                         {
-                            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                            IList<Item>? items = RefreshInventorySource(menu, grid);
                             if (items != null && grid.CanScroll(items, 1))
                             {
                                 grid.Scroll(items, 1);
@@ -1899,7 +2359,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     {
                         if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
                         {
-                            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+                            IList<Item>? items = RefreshInventorySource(menu, grid);
                             if (items != null && grid.CanScroll(items, -1))
                             {
                                 grid.Scroll(items, -1);
@@ -1916,11 +2376,39 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (!GridViewports.TryGetValue(__instance, out GridViewport? grid) || grid == null)
                 return;
-            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+            IList<Item>? items = RefreshInventorySource(__instance, grid);
             if (items != null)
             {
+                ApplyChestDrawSafetyLayout(__instance, grid, items);
                 grid.Draw(b, items);
             }
+        }
+
+        private static void ApplyChestDrawSafetyLayout(
+            InventoryMenu inventoryMenu,
+            GridViewport grid,
+            IList<Item> items
+        )
+        {
+            if (Game1.activeClickableMenu == null || !IsSideLayoutMenu(Game1.activeClickableMenu))
+                return;
+            if (!ReferenceEquals(items, Game1.player?.Items))
+                return;
+            if (!ChestLayoutStates.TryGetValue(Game1.activeClickableMenu, out var state))
+                return;
+            if (state.SideButtonTargets.Count == 0 || grid.HasResolvedCustomLayout)
+                return;
+
+            grid.CustomArrowLayout = true;
+            grid.UpArrow.myID = ArrowIdUp;
+            grid.DownArrow.myID = ArrowIdDown;
+            RestoreChestPlayerScroll(state, grid, inventoryMenu, "draw-safety");
+            bool showScrollButtons = InventoryGridMetrics.GetEffectiveSlotCount(items, isPlayerInventory: true) > inventoryMenu.capacity;
+            grid.SetScrollButtonsClickable(Game1.activeClickableMenu, showScrollButtons);
+            grid.ImportSideButtonTargets(state.SideButtonTargets);
+            bool applied = grid.ApplyCachedSideButtonTargets(Game1.activeClickableMenu, "draw-safety");
+            grid.HasResolvedCustomLayout = applied;
+            RememberChestPlayerScroll(state, grid, inventoryMenu, items);
         }
 
         private static void InventoryMenuPerformHoverActionPostfix(
@@ -1931,7 +2419,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (!GridViewports.TryGetValue(__instance, out GridViewport? grid) || grid == null)
                 return;
-            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+            IList<Item>? items = RefreshInventorySource(__instance, grid);
             if (items != null)
             {
                 grid.PerformHoverAction(x, y, items);
@@ -1949,7 +2437,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (!GridViewports.TryGetValue(__instance, out GridViewport? grid) || grid == null)
                 return true;
-            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+            IList<Item>? items = RefreshInventorySource(__instance, grid);
             if (items != null)
             {
                 if (grid.ReceiveLeftClick(x, y, items))
@@ -1970,7 +2458,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (!GridViewports.TryGetValue(__instance, out GridViewport? grid) || grid == null)
                 return true;
-            IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
+            IList<Item>? items = RefreshInventorySource(__instance, grid);
             if (items != null)
             {
                 if (grid.ReceiveLeftClick(x, y, items))
@@ -1988,8 +2476,6 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         )
         {
             state = null;
-            if (Game1.player?.maxItems.Value <= InventoryGridMetrics.DefaultMaxItems)
-                return false;
             if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return false;
             if (StardewMenuFields.ActualInventory.GetValue(inventoryMenu) is not IList<Item> actualInventory)
@@ -1998,10 +2484,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             IList<Item> fullInventory = actualInventory is ScrollableInventoryList scrollable
                 ? scrollable.Underlying
                 : actualInventory;
-            if (
-                fullInventory != (Game1.player?.Items)
-                || InventoryGridMetrics.GetTotalRows(fullInventory) <= inventoryMenu.rows
-            )
+            if (fullInventory != (Game1.player?.Items))
+                return false;
+            if (!InventoryGridMetrics.PlayerHasExpandedInventory(fullInventory))
+                return false;
+
+            int requiredRows = GetInventoryPageEffectiveRequiredRows(inventoryMenu, null);
+            if (requiredRows <= InventoryGridMetrics.DefaultRowCount)
                 return false;
 
             state =

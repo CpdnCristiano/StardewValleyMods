@@ -6,23 +6,40 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Collections
     {
         private readonly int _offset;
         private readonly int _capacity;
+        private readonly int _virtualCount;
 
-        public ScrollableInventoryList(IList<Item> underlying, int offset, int capacity)
+        public ScrollableInventoryList(IList<Item> underlying, int offset, int capacity, int? virtualCount = null)
         {
             Underlying = underlying;
             _offset = offset;
             _capacity = capacity;
+            _virtualCount = Math.Max(underlying.Count, virtualCount ?? underlying.Count);
         }
 
         public IList<Item> Underlying { get; }
 
         public Item this[int index]
         {
-            get => Underlying[_offset + index];
-            set => Underlying[_offset + index] = value;
+            get
+            {
+                int actualIndex = _offset + index;
+                return actualIndex >= 0 && actualIndex < Underlying.Count ? Underlying[actualIndex] : null!;
+            }
+            set
+            {
+                int actualIndex = _offset + index;
+                if (actualIndex < 0 || actualIndex >= _virtualCount)
+                    return;
+
+                while (Underlying.Count <= actualIndex && Underlying.Count < _virtualCount)
+                    Underlying.Add(null!);
+
+                if (actualIndex < Underlying.Count)
+                    Underlying[actualIndex] = value;
+            }
         }
 
-        public int Count => Math.Max(0, Math.Min(_capacity, Underlying.Count - _offset));
+        public int Count => Math.Max(0, Math.Min(_capacity, _virtualCount - _offset));
         public bool IsReadOnly => Underlying.IsReadOnly;
 
         public void Add(Item item) => throw new NotSupportedException();
