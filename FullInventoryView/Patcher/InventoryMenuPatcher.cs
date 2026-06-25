@@ -14,7 +14,6 @@ using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Inventories;
 using StardewValley.Menus;
-using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework;
 using static StardewValley.Menus.InventoryMenu;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
@@ -50,6 +49,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             public ClickableComponent? ColorBtn;
             public ClickableComponent? FillBtn;
             public ClickableComponent? OrganizeBtn;
+            public ClickableComponent? SpecialBtn;
             public ClickableComponent? OkBtn;
             public ClickableComponent? TrashBtn;
             public DiscreteColorPicker? ColorPicker;
@@ -555,23 +555,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             EnsureScrollButtons(page);
 
-            if (InventoryPageInventoryField.GetValue(page) is InventoryMenu inventoryMenu)
-            {
-                if (GridViewports.TryGetValue(inventoryMenu, out var grid) && grid != null)
-                {
-                    if (
-                        grid.UpArrow != null
-                        && !__instance.allClickableComponents.Contains(grid.UpArrow)
-                    )
-                        __instance.allClickableComponents.Add(grid.UpArrow);
-                    if (
-                        grid.DownArrow != null
-                        && !__instance.allClickableComponents.Contains(grid.DownArrow)
-                    )
-                        __instance.allClickableComponents.Add(grid.DownArrow);
-                }
-            }
-
+            // EnsureScrollButtons already adds/removes the scroll arrows from both the page and
+            // the active GameMenu list depending on whether the InventoryPage actually has scroll.
             WireGamepadNavigation(page, __instance.allClickableComponents);
         }
 
@@ -590,6 +575,20 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             EnsureScrollButtons(__instance);
             WireGamepadNavigation(__instance, __instance.allClickableComponents);
+        }
+
+        private static void RefreshInventoryPageGamepadNavigation(InventoryPage page)
+        {
+            EnsureScrollButtons(page);
+
+            if (Game1.activeClickableMenu is GameMenu gameMenu && gameMenu.allClickableComponents != null)
+            {
+                WireGamepadNavigation(page, gameMenu.allClickableComponents);
+                return;
+            }
+
+            if (page.allClickableComponents != null)
+                WireGamepadNavigation(page, page.allClickableComponents);
         }
 
         internal static void WireGamepadNavigation(
@@ -628,14 +627,27 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
 
-            // 1. Coleta as setas de rolagem do estado se existirem
+            // 1. Coleta as setas de rolagem apenas quando o InventoryPage realmente tem scroll.
+            // Se não há scroll, elas não podem ficar como componentes invisíveis na navegação.
             GridViewports.TryGetValue(inventoryMenu, out var grid);
+            bool showScrollButtons = grid != null
+                && InventoryPageShouldShowScrollButtons(page, inventoryMenu, grid);
             if (grid != null)
             {
-                if (grid.UpArrow != null && activeSet.Add(grid.UpArrow))
-                    activeComponents.Add(grid.UpArrow);
-                if (grid.DownArrow != null && activeSet.Add(grid.DownArrow))
-                    activeComponents.Add(grid.DownArrow);
+                if (showScrollButtons)
+                {
+                    if (grid.UpArrow != null && activeSet.Add(grid.UpArrow))
+                        activeComponents.Add(grid.UpArrow);
+                    if (grid.DownArrow != null && activeSet.Add(grid.DownArrow))
+                        activeComponents.Add(grid.DownArrow);
+                }
+                else
+                {
+                    activeComponents.Remove(grid.UpArrow);
+                    activeComponents.Remove(grid.DownArrow);
+                    activeSet.Remove(grid.UpArrow);
+                    activeSet.Remove(grid.DownArrow);
+                }
             }
 
             // 2. Coleta TODOS os botões que estão à direita do inventário (Lixeira, Organizar, Setas e Mods)
@@ -653,8 +665,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var rightColumn = new List<ClickableComponent>();
             var bottomComponents = new List<ClickableComponent>();
 
-            // Always keep arrows and organize button in rightColumn
-            if (grid != null)
+            // Keep arrows in the side column only when they are visible/clickable.
+            if (grid != null && showScrollButtons)
             {
                 if (grid.UpArrow != null)
                     rightColumn.Add(grid.UpArrow);
@@ -705,10 +717,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
 
-            // Ordena todos por Y
-            rightColumn = rightColumn.OrderBy(c => c.bounds.Center.Y).ToList();
+            rightColumn = rightColumn.Distinct().ToList();
 
-            // 3. O SEGREDO: Atribuir IDs válidos aos botões de mods (que normalmente usam -1).
+            // 3. Atribuir IDs válidos aos botões de mods (que normalmente usam -1).
             int dynamicId = 150000;
             foreach (var comp in rightColumn)
             {
@@ -787,56 +798,117 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
             }
 
-            // 4. Mapeamento Vertical e Horizontal (Esquerda) Cirúrgico para a coluna direita
-            for (int i = 0; i < rightColumn.Count; i++)
+            // 4. Mapeamento lateral do InventoryPage respeitando múltiplas colunas.
+            // A organização visual agora pode criar uma segunda coluna; então o gamepad
+            // também precisa enxergar colunas reais: cima/baixo dentro da mesma coluna,
+            // direita/esquerda entre colunas, e slots -> primeira coluna lateral.
+            var rightColumns = GroupNavigationColumns(rightColumn, 32);
+            if (rightColumns.Count > 0)
             {
-                var comp = rightColumn[i];
+                // Logical side rows exclude scroll arrows and the trash can.
+                // Vertical navigation may still pass through arrows/trash, but horizontal
+                // row matching must only count the real side buttons.
+                var nonArrowColumns = rightColumns
+                    .Select(column => column
+                        .Where(c => !IsInventoryPageScrollArrow(grid, c) && c != page.trashCan)
+                        .ToList())
+                    .ToList();
 
-                comp.upNeighborID = i > 0 ? rightColumn[i - 1].myID : -1;
-                comp.downNeighborID = i < rightColumn.Count - 1 ? rightColumn[i + 1].myID : -1;
-
-                ClickableComponent? closestSlot = null;
-                int minDistance = int.MaxValue;
-                int compY = comp.bounds.Center.Y;
-                foreach (var s in rightmostSlots)
+                for (int colIndex = 0; colIndex < rightColumns.Count; colIndex++)
                 {
-                    int dist = Math.Abs(s.bounds.Center.Y - compY);
-                    if (dist < minDistance)
+                    var column = rightColumns[colIndex];
+                    var logicalColumn = nonArrowColumns[colIndex];
+
+                    for (int i = 0; i < column.Count; i++)
                     {
-                        minDistance = dist;
-                        closestSlot = s;
+                        var comp = column[i];
+
+                        if (grid != null && comp == grid.UpArrow)
+                        {
+                            // InventoryPage: the up-arrow has no component above it. Pressing up
+                            // here must stop instead of wrapping/descending into another button.
+                            comp.upNeighborID = -1;
+                            var firstLogical = logicalColumn.FirstOrDefault();
+                            comp.downNeighborID = firstLogical != null ? firstLogical.myID : -1;
+                            comp.leftNeighborID = -1;
+                            comp.rightNeighborID = -1;
+                            continue;
+                        }
+
+                        if (grid != null && comp == grid.DownArrow)
+                        {
+                            var lastLogical = logicalColumn.LastOrDefault();
+                            comp.upNeighborID = lastLogical != null ? lastLogical.myID : -1;
+                            // InventoryPage: pressing DOWN on the down-arrow must reach the trash can.
+                            // The arrow's own action still scrolls when pressing A; this is only directional navigation.
+                            comp.downNeighborID = page.trashCan != null ? page.trashCan.myID : -1;
+                            comp.leftNeighborID = -1;
+                            comp.rightNeighborID = -1;
+                            if (page.trashCan != null)
+                                page.trashCan.upNeighborID = comp.myID;
+                            continue;
+                        }
+
+                        int logicalIndex = logicalColumn.IndexOf(comp);
+
+                        if (logicalIndex >= 0)
+                        {
+                            if (logicalIndex > 0)
+                                comp.upNeighborID = logicalColumn[logicalIndex - 1].myID;
+                            else if (grid != null && column.Contains(grid.UpArrow))
+                                comp.upNeighborID = grid.UpArrow.myID;
+                            else
+                                comp.upNeighborID = -1;
+
+                            if (logicalIndex < logicalColumn.Count - 1)
+                                comp.downNeighborID = logicalColumn[logicalIndex + 1].myID;
+                            else if (grid != null && showScrollButtons && column.Contains(grid.DownArrow))
+                                comp.downNeighborID = grid.DownArrow.myID;
+                            else if (page.trashCan != null)
+                                comp.downNeighborID = page.trashCan.myID;
+                            else
+                                comp.downNeighborID = -1;
+                        }
+                        else
+                        {
+                            comp.upNeighborID = i > 0 ? column[i - 1].myID : -1;
+                            comp.downNeighborID = i < column.Count - 1 ? column[i + 1].myID : -1;
+                        }
+
+                        if (colIndex > 0)
+                        {
+                            var leftButton = PickSameLogicalRow(nonArrowColumns[colIndex - 1], logicalIndex, comp.bounds.Center.Y);
+                            if (leftButton != null)
+                                comp.leftNeighborID = leftButton.myID;
+                        }
+                        else
+                        {
+                            var closestSlot = FindClosestByY(rightmostSlots, comp.bounds.Center.Y);
+                            if (closestSlot != null)
+                                comp.leftNeighborID = closestSlot.myID;
+                        }
+
+                        if (colIndex < rightColumns.Count - 1)
+                        {
+                            var rightButton = PickSameLogicalRow(nonArrowColumns[colIndex + 1], logicalIndex, comp.bounds.Center.Y);
+                            if (rightButton != null)
+                                comp.rightNeighborID = rightButton.myID;
+                        }
                     }
                 }
 
-                if (closestSlot != null)
+                var primaryRightColumn = nonArrowColumns[0].Count > 0
+                    ? nonArrowColumns[0]
+                    : rightColumns[0];
+                foreach (var slot in rightmostSlots)
                 {
-                    comp.leftNeighborID = closestSlot.myID;
+                    var closestRightComp = FindClosestByY(primaryRightColumn, slot.bounds.Center.Y);
+                    if (closestRightComp != null)
+                        slot.rightNeighborID = closestRightComp.myID;
                 }
             }
 
-            // 5. Forçar o inventário a apontar para o botão MAIS PRÓXIMO (Anular o Hardcode do Jogo)
-            foreach (var slot in rightmostSlots)
-            {
-                ClickableComponent? closestRightComp = null;
-                int minDistance = int.MaxValue;
-                int slotY = slot.bounds.Center.Y;
-                foreach (var c in rightColumn)
-                {
-                    int dist = Math.Abs(c.bounds.Center.Y - slotY);
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        closestRightComp = c;
-                    }
-                }
-
-                if (closestRightComp != null)
-                {
-                    slot.rightNeighborID = closestRightComp.myID;
-                }
-            }
-
-            // 6. Corrigir navegação vertical entre as linhas do inventário e os componentes de baixo
+            // 5. Corrigir navegação vertical entre as linhas do inventário e os componentes de baixo
             foreach (var slot in lastRowSlots)
             {
                 ClickableComponent? bestDown = null;
@@ -977,6 +1049,80 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
         }
 
+        private static List<List<ClickableComponent>> GroupNavigationColumns(
+            IEnumerable<ClickableComponent> components,
+            int tolerance
+        )
+        {
+            var columns = new List<List<ClickableComponent>>();
+            foreach (var component in components
+                .Where(c => c != null)
+                .Distinct()
+                .OrderBy(c => c.bounds.Center.X)
+                .ThenBy(c => c.bounds.Center.Y))
+            {
+                var column = columns.FirstOrDefault(c =>
+                    Math.Abs(c[0].bounds.Center.X - component.bounds.Center.X) <= tolerance
+                );
+                if (column == null)
+                {
+                    column = new List<ClickableComponent>();
+                    columns.Add(column);
+                }
+                column.Add(component);
+            }
+
+            foreach (var column in columns)
+                column.Sort((a, b) => a.bounds.Center.Y.CompareTo(b.bounds.Center.Y));
+
+            return columns;
+        }
+
+        private static bool IsInventoryPageScrollArrow(GridViewport? grid, ClickableComponent component)
+        {
+            return grid != null && (component == grid.UpArrow || component == grid.DownArrow);
+        }
+
+        private static ClickableComponent? PickSameLogicalRow(
+            List<ClickableComponent> column,
+            int logicalIndex,
+            int fallbackY
+        )
+        {
+            if (column.Count == 0)
+                return null;
+
+            if (logicalIndex >= 0 && logicalIndex < column.Count)
+                return column[logicalIndex];
+
+            if (logicalIndex >= column.Count)
+                return column[column.Count - 1];
+
+            return FindClosestByY(column, fallbackY);
+        }
+
+        private static ClickableComponent? FindClosestByY(
+            IEnumerable<ClickableComponent> components,
+            int y
+        )
+        {
+            ClickableComponent? best = null;
+            int bestDistance = int.MaxValue;
+            foreach (var component in components)
+            {
+                if (component == null)
+                    continue;
+
+                int distance = Math.Abs(component.bounds.Center.Y - y);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = component;
+                }
+            }
+            return best;
+        }
+
         private static bool drawCurrencyPrefix(ShopMenu __instance, SpriteBatch b)
         {
             return InventoryMenuPatcherHelpers.DrawCurrencyPrefix(
@@ -1063,7 +1209,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             playerGrid.CustomArrowLayout = true;
             playerGrid.UpArrow.myID = ArrowIdUp;
             playerGrid.DownArrow.myID = ArrowIdDown;
-            playerGrid.EnsureClickableComponents(menu);
+            bool showScrollButtons = playerGrid.FullInventory != null
+                && playerGrid.FullInventory.Count > playerMenu.capacity;
+            playerGrid.SetScrollButtonsClickable(menu, showScrollButtons);
 
             var fields = MenuFieldsCache.GetValue(
                 menu,
@@ -1083,12 +1231,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                             m,
                             "organizeStashButton"
                         );
-                    var oK =
-                        InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "okButton")
-                        ?? InventoryMenuPatcherMenuHelpers.FindFieldContaining(
-                            m,
-                            "specialButton"
-                        );
+                    var oK = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "okButton");
+                    var sBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "specialButton");
                     var tBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "trashCan");
 
                     if (
@@ -1112,6 +1256,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     )
                         oK = null;
                     if (
+                        sBtn != null
+                        && (sBtn == m.upperRightCloseButton || sBtn.name == "upperRightCloseButton")
+                    )
+                        sBtn = null;
+                    if (
                         tBtn != null
                         && (tBtn == m.upperRightCloseButton || tBtn.name == "upperRightCloseButton")
                     )
@@ -1130,6 +1279,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         ColorBtn = cBtn,
                         FillBtn = fBtn,
                         OrganizeBtn = oBtn,
+                        SpecialBtn = sBtn,
                         OkBtn = oK,
                         TrashBtn = tBtn,
                         ColorPicker = cPicker,
@@ -1141,6 +1291,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var colorBtn = fields.ColorBtn;
             var fillBtn = fields.FillBtn;
             var organizeBtn = fields.OrganizeBtn;
+            var specialBtn = fields.SpecialBtn;
             var okBtn = fields.OkBtn;
             var trashBtn = fields.TrashBtn;
             var pickerToggle = fields.PickerToggle;
@@ -1152,17 +1303,19 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var arrowAnchorComponentOverride =
                 InventoryMenuPatcherHelpers.GetArrowAnchorComponentOverride(menu);
             int anchorCenterX =
-                (okBtn ?? trashBtn ?? organizeBtn ?? fillBtn ?? colorBtn)?.bounds.Center.X ?? 0;
+                (okBtn ?? trashBtn ?? organizeBtn ?? fillBtn ?? colorBtn ?? specialBtn)?.bounds.Center.X ?? 0;
             int layoutHash = ComputeChestLayoutHash(
                 anchorCenterX,
                 new List<ClickableComponent>(),
                 colorBtn,
                 fillBtn,
                 organizeBtn,
+                specialBtn,
                 okBtn,
                 trashBtn,
                 chestSlots,
                 playerSlots,
+                showScrollButtons,
                 menu.allClickableComponents?.Count ?? 0
             );
             if (!UpdateCachedLayoutHash(menu, layoutHash))
@@ -1187,10 +1340,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     ColorButton = colorBtn,
                     FillButton = fillBtn,
                     OrganizeButton = organizeBtn,
+                    SpecialButton = specialBtn,
                     OkButton = okBtn,
                     TrashButton = trashBtn,
                     PickerToggle = pickerToggle,
                     ColorPicker = colorPicker,
+                    ShowScrollButtons = showScrollButtons,
                 }
             );
         }
@@ -1213,22 +1368,26 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ClickableComponent? colorBtn,
             ClickableComponent? fillBtn,
             ClickableComponent? organizeBtn,
+            ClickableComponent? specialBtn,
             ClickableComponent? okBtn,
             ClickableComponent? trashBtn,
             List<ClickableComponent> chestSlots,
             List<ClickableComponent> playerSlots,
+            bool showScrollButtons,
             int clickableCount
         )
         {
             var hash = new HashCode();
             hash.Add(anchorCenterX);
             hash.Add(clickableCount);
+            hash.Add(showScrollButtons);
             hash.Add(chestSlots[0].bounds.Y);
             hash.Add(playerSlots[0].bounds.Y);
             hash.Add(playerSlots[playerSlots.Count - 1].bounds.Y);
             hash.Add(colorBtn != null ? RuntimeHelpers.GetHashCode(colorBtn) : 0);
             hash.Add(fillBtn != null ? RuntimeHelpers.GetHashCode(fillBtn) : 0);
             hash.Add(organizeBtn != null ? RuntimeHelpers.GetHashCode(organizeBtn) : 0);
+            hash.Add(specialBtn != null ? RuntimeHelpers.GetHashCode(specialBtn) : 0);
             hash.Add(okBtn != null ? RuntimeHelpers.GetHashCode(okBtn) : 0);
             hash.Add(trashBtn != null ? RuntimeHelpers.GetHashCode(trashBtn) : 0);
 
@@ -1442,8 +1601,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void InventoryPagePostfix(InventoryPage __instance)
         {
-            EnsureScrollButtons(__instance);
+            // Build the vanilla/component list first, then apply our arrow layout and side-column
+            // gamepad links. Doing this in the opposite order lets populateClickableComponentList
+            // overwrite the first-frame remap, so the second mod column only starts working after
+            // a later mouse click/rebuild.
             __instance.populateClickableComponentList();
+            EnsureScrollButtons(__instance);
             __instance.snapToDefaultClickableComponent();
         }
 
@@ -1540,10 +1703,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             grid.UpArrow.myID = ArrowIdUp;
             grid.DownArrow.myID = ArrowIdDown;
 
+            // Layout can still use the arrow bounds as virtual anchors, but the arrows only
+            // become clickable/navigable when the inventory actually needs scroll.
             LayoutScrollButtons(page, grid);
 
-            AddClickableComponent(page, grid.UpArrow);
-            AddClickableComponent(page, grid.DownArrow);
+            bool showScrollButtons = InventoryPageShouldShowScrollButtons(page, inventoryMenu, grid);
+            SetInventoryPageScrollButtonsClickable(page, grid, showScrollButtons);
 
             if (Game1.options?.SnappyMenus ?? false)
             {
@@ -1573,7 +1738,64 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 return;
             var organizeButton =
                 InventoryPageOrganizeButtonField.GetValue(page) as ClickableTextureComponent;
-            grid.LayoutInventoryPageButtons(page, slots, organizeButton);
+            bool showScrollButtons = InventoryPageShouldShowScrollButtons(page, inventoryMenu, grid);
+            grid.LayoutInventoryPageButtons(page, slots, organizeButton, showScrollButtons);
+        }
+
+        private static bool InventoryPageShouldShowScrollButtons(
+            InventoryPage page,
+            InventoryMenu inventoryMenu,
+            GridViewport? grid
+        )
+        {
+            IList<Item>? items = grid?.OriginalInventory ?? grid?.FullInventory;
+            if (items != null)
+                return items.Count > inventoryMenu.capacity;
+
+            if (ActualInventoryField.GetValue(inventoryMenu) is IList<Item> currentInventory)
+                return currentInventory.Count > inventoryMenu.capacity;
+
+            return Game1.player != null && Game1.player.maxItems.Value > inventoryMenu.capacity;
+        }
+
+        private static void SetInventoryPageScrollButtonsClickable(
+            InventoryPage page,
+            GridViewport grid,
+            bool enabled
+        )
+        {
+            page.allClickableComponents ??= new List<ClickableComponent>();
+
+            if (enabled)
+            {
+                AddClickableComponent(page, grid.UpArrow);
+                AddClickableComponent(page, grid.DownArrow);
+            }
+            else
+            {
+                page.allClickableComponents.Remove(grid.UpArrow);
+                page.allClickableComponents.Remove(grid.DownArrow);
+            }
+
+            if (
+                Game1.activeClickableMenu is GameMenu gameMenu
+                && gameMenu.GetCurrentPage() == page
+                && gameMenu.allClickableComponents != null
+            )
+            {
+                if (enabled)
+                {
+                    if (!gameMenu.allClickableComponents.Contains(grid.UpArrow))
+                        gameMenu.allClickableComponents.Add(grid.UpArrow);
+                    if (!gameMenu.allClickableComponents.Contains(grid.DownArrow))
+                        gameMenu.allClickableComponents.Add(grid.DownArrow);
+                }
+                else
+                {
+                    gameMenu.allClickableComponents.Remove(grid.UpArrow);
+                    gameMenu.allClickableComponents.Remove(grid.DownArrow);
+                }
+            }
         }
 
         private static void AddClickableComponent(InventoryPage page, ClickableComponent component)
@@ -1630,18 +1852,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (!TryGetPageState(inventoryPage, out GridViewport? grid) || grid == null)
                 return;
 
-            int pageCount = inventoryPage.allClickableComponents?.Count ?? 0;
-            int menuCount = __instance.allClickableComponents?.Count ?? 0;
-            int combinedHash = pageCount + (menuCount << 16);
-
-            if (combinedHash != grid.LastPageComponentsHash)
+            // Keep the InventoryPage side-column links current from the first visible frame.
+            // Some mods rebuild/adjust side buttons after construction without changing the
+            // component count, so a count-only hash can leave stale first-frame navigation.
+            LayoutScrollButtons(inventoryPage, grid);
+            if (__instance.allClickableComponents != null)
             {
-                grid.LastPageComponentsHash = combinedHash;
-                LayoutScrollButtons(inventoryPage, grid);
-                if (__instance.allClickableComponents != null)
-                {
-                    WireGamepadNavigation(inventoryPage, __instance.allClickableComponents);
-                }
+                WireGamepadNavigation(inventoryPage, __instance.allClickableComponents);
             }
 
             if (GridViewports.TryGetValue(inventoryMenu, out var viewport) && viewport != null)
@@ -1770,6 +1987,28 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             Buttons button
         )
         {
+            bool isDirectionalButton =
+                button == Buttons.DPadDown
+                || button == Buttons.DPadUp
+                || button == Buttons.DPadLeft
+                || button == Buttons.DPadRight
+                || button == Buttons.LeftThumbstickDown
+                || button == Buttons.LeftThumbstickUp
+                || button == Buttons.LeftThumbstickLeft
+                || button == Buttons.LeftThumbstickRight;
+
+            if (isDirectionalButton)
+            {
+                if (__instance is InventoryPage inventoryPageInstance)
+                {
+                    RefreshInventoryPageGamepadNavigation(inventoryPageInstance);
+                }
+                else if (__instance is GameMenu gameMenu && gameMenu.GetCurrentPage() is InventoryPage page)
+                {
+                    RefreshInventoryPageGamepadNavigation(page);
+                }
+            }
+
             if (
                 button != Buttons.DPadDown
                 && button != Buttons.DPadUp
@@ -1926,6 +2165,67 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 : GridViewports.TryGetValue(inventoryMenu, out var existing) ? existing
                 : null;
             return state is not null;
+        }
+
+        private sealed class ScrollableInventoryList : IList<Item>
+        {
+            private readonly int _offset;
+            private readonly int _capacity;
+
+            public ScrollableInventoryList(IList<Item> underlying, int offset, int capacity)
+            {
+                Underlying = underlying;
+                _offset = offset;
+                _capacity = capacity;
+            }
+
+            public IList<Item> Underlying { get; }
+
+            public Item this[int index]
+            {
+                get => Underlying[_offset + index];
+                set => Underlying[_offset + index] = value;
+            }
+
+            public int Count => Math.Max(0, Math.Min(_capacity, Underlying.Count - _offset));
+            public bool IsReadOnly => Underlying.IsReadOnly;
+
+            public void Add(Item item) => throw new NotSupportedException();
+
+            public void Clear() => throw new NotSupportedException();
+
+            public bool Contains(Item item) => IndexOf(item) >= 0;
+
+            public void CopyTo(Item[] array, int arrayIndex)
+            {
+                for (int i = 0; i < Count; i++)
+                    array[arrayIndex + i] = this[i];
+            }
+
+            public IEnumerator<Item> GetEnumerator()
+            {
+                for (int i = 0; i < Count; i++)
+                    yield return this[i];
+            }
+
+            public int IndexOf(Item item)
+            {
+                for (int i = 0; i < Count; i++)
+                {
+                    if (Equals(this[i], item))
+                        return i;
+                }
+                return -1;
+            }
+
+            public void Insert(int index, Item item) => throw new NotSupportedException();
+
+            public bool Remove(Item item) => throw new NotSupportedException();
+
+            public void RemoveAt(int index) => throw new NotSupportedException();
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =>
+                GetEnumerator();
         }
     }
 }

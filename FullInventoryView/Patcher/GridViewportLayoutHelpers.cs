@@ -13,6 +13,26 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return a.Right >= b.Left - tolerance && a.Left <= b.Right + tolerance;
         }
 
+        public static void SetUpNeighbor(ClickableComponent component, int neighborId)
+        {
+            component.upNeighborID = neighborId;
+        }
+
+        public static void SetDownNeighbor(ClickableComponent component, int neighborId)
+        {
+            component.downNeighborID = neighborId;
+        }
+
+        public static void SetLeftNeighbor(ClickableComponent component, int neighborId)
+        {
+            component.leftNeighborID = neighborId;
+        }
+
+        public static void SetRightNeighbor(ClickableComponent component, int neighborId)
+        {
+            component.rightNeighborID = neighborId;
+        }
+
         public static void WireSideColumnNavigation(
             List<ClickableComponent> slotColumn,
             List<ClickableComponent> buttonColumn,
@@ -21,70 +41,165 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             bool columnIsOnLeft
         )
         {
-            buttonColumn = buttonColumn.Distinct().OrderBy(c => c.bounds.Center.Y).ToList();
-            bottomComponents = bottomComponents.Distinct().ToList();
+            WireSideColumnsNavigation(slotColumn, buttonColumn, startingDynamicId, columnIsOnLeft);
+        }
+
+        public static void WireSideColumnsNavigation(
+            List<ClickableComponent> slotColumn,
+            List<ClickableComponent> sideButtons,
+            int startingDynamicId,
+            bool buttonsAreOnLeft
+        )
+        {
+            slotColumn = slotColumn.Where(c => c != null).Distinct().ToList();
+            sideButtons = sideButtons
+                .Where(c => c != null)
+                .Distinct()
+                .OrderBy(c => c.bounds.Center.X)
+                .ThenBy(c => c.bounds.Center.Y)
+                .ToList();
+
+            if (sideButtons.Count == 0)
+                return;
 
             int dynamicId = startingDynamicId;
-            foreach (var comp in buttonColumn)
-            {
-                if (comp.myID == -1)
-                    comp.myID = dynamicId++;
-            }
-            foreach (var comp in bottomComponents)
+            foreach (var comp in sideButtons)
             {
                 if (comp.myID == -1)
                     comp.myID = dynamicId++;
             }
 
-            for (int i = 0; i < buttonColumn.Count; i++)
+            var columns = GroupColumns(sideButtons, 24);
+            foreach (var column in columns)
             {
-                var comp = buttonColumn[i];
-                comp.upNeighborID = i > 0 ? buttonColumn[i - 1].myID : -1;
-                comp.downNeighborID = i < buttonColumn.Count - 1 ? buttonColumn[i + 1].myID : -1;
-
-                ClickableComponent? closestSlot = null;
-                int minDistance = int.MaxValue;
-                foreach (var slot in slotColumn)
+                for (int i = 0; i < column.Count; i++)
                 {
-                    int dist = Math.Abs(slot.bounds.Center.Y - comp.bounds.Center.Y);
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        closestSlot = slot;
-                    }
+                    var comp = column[i];
+                    if (i > 0)
+                        SetUpNeighbor(comp, column[i - 1].myID);
+                    if (i < column.Count - 1)
+                        SetDownNeighbor(comp, column[i + 1].myID);
+                }
+            }
+
+            foreach (var comp in sideButtons)
+            {
+                var leftButton = FindClosestHorizontalButton(comp, columns, toLeft: true);
+                var rightButton = FindClosestHorizontalButton(comp, columns, toLeft: false);
+
+                if (leftButton != null)
+                    SetLeftNeighbor(comp, leftButton.myID);
+                else if (!buttonsAreOnLeft)
+                {
+                    var closestSlot = FindClosestByY(slotColumn, comp.bounds.Center.Y);
+                    if (closestSlot != null)
+                        SetLeftNeighbor(comp, closestSlot.myID);
                 }
 
-                if (closestSlot != null)
+                if (rightButton != null)
+                    SetRightNeighbor(comp, rightButton.myID);
+                else if (buttonsAreOnLeft)
                 {
-                    if (columnIsOnLeft)
-                        comp.rightNeighborID = closestSlot.myID;
-                    else
-                        comp.leftNeighborID = closestSlot.myID;
+                    var closestSlot = FindClosestByY(slotColumn, comp.bounds.Center.Y);
+                    if (closestSlot != null)
+                        SetRightNeighbor(comp, closestSlot.myID);
                 }
             }
 
             foreach (var slot in slotColumn)
             {
-                ClickableComponent? closestButton = null;
-                int minDistance = int.MaxValue;
-                foreach (var comp in buttonColumn)
-                {
-                    int dist = Math.Abs(comp.bounds.Center.Y - slot.bounds.Center.Y);
-                    if (dist < minDistance)
-                    {
-                        minDistance = dist;
-                        closestButton = comp;
-                    }
-                }
+                var closestButton = FindClosestByY(sideButtons, slot.bounds.Center.Y);
+                if (closestButton == null)
+                    continue;
 
-                if (closestButton != null)
+                if (buttonsAreOnLeft)
+                    SetLeftNeighbor(slot, closestButton.myID);
+                else
+                    SetRightNeighbor(slot, closestButton.myID);
+            }
+        }
+
+        private static List<List<ClickableComponent>> GroupColumns(
+            List<ClickableComponent> buttons,
+            int tolerance
+        )
+        {
+            var columns = new List<List<ClickableComponent>>();
+            foreach (var button in buttons.OrderBy(c => c.bounds.Center.X).ThenBy(c => c.bounds.Center.Y))
+            {
+                var column = columns.FirstOrDefault(c =>
+                    Math.Abs(c[0].bounds.Center.X - button.bounds.Center.X) <= tolerance
+                );
+                if (column == null)
                 {
-                    if (columnIsOnLeft)
-                        slot.leftNeighborID = closestButton.myID;
-                    else
-                        slot.rightNeighborID = closestButton.myID;
+                    column = new List<ClickableComponent>();
+                    columns.Add(column);
+                }
+                column.Add(button);
+            }
+
+            foreach (var column in columns)
+            {
+                column.Sort((a, b) => a.bounds.Center.Y.CompareTo(b.bounds.Center.Y));
+            }
+            columns.Sort((a, b) => a.Average(c => c.bounds.Center.X).CompareTo(b.Average(c => c.bounds.Center.X)));
+            return columns;
+        }
+
+        private static ClickableComponent? FindClosestByY(
+            List<ClickableComponent> components,
+            int centerY
+        )
+        {
+            ClickableComponent? closest = null;
+            int bestDistance = int.MaxValue;
+            foreach (var component in components)
+            {
+                int distance = Math.Abs(component.bounds.Center.Y - centerY);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    closest = component;
                 }
             }
+            return closest;
+        }
+
+        private static ClickableComponent? FindClosestHorizontalButton(
+            ClickableComponent source,
+            List<List<ClickableComponent>> columns,
+            bool toLeft
+        )
+        {
+            ClickableComponent? closest = null;
+            int bestScore = int.MaxValue;
+            int sourceX = source.bounds.Center.X;
+            int sourceY = source.bounds.Center.Y;
+
+            foreach (var column in columns)
+            {
+                if (column.Contains(source))
+                    continue;
+
+                int columnX = (int)column.Average(c => c.bounds.Center.X);
+                if (toLeft && columnX >= sourceX)
+                    continue;
+                if (!toLeft && columnX <= sourceX)
+                    continue;
+
+                foreach (var candidate in column)
+                {
+                    int xDistance = Math.Abs(candidate.bounds.Center.X - sourceX);
+                    int yDistance = Math.Abs(candidate.bounds.Center.Y - sourceY);
+                    int score = (xDistance * 4) + yDistance;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        closest = candidate;
+                    }
+                }
+            }
+            return closest;
         }
 
         public static List<ClickableComponent> GetComponentsOnAxisX(
@@ -141,7 +256,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (menu.allClickableComponents == null)
                 return buttons;
 
-            int chestRightEdge = chestSlots.Max(s => s.bounds.Right) - 16;
+            int slotsLeftEdge = Math.Min(chestSlots.Min(s => s.bounds.Left), playerSlots.Min(s => s.bounds.Left));
+            int slotsRightEdge = Math.Max(chestSlots.Max(s => s.bounds.Right), playerSlots.Max(s => s.bounds.Right));
             int fullMinY =
                 Math.Min(chestSlots.Min(s => s.bounds.Top), playerSlots.Min(s => s.bounds.Top)) - 16;
             int fullMaxY =
@@ -163,7 +279,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     continue;
                 if (chestSlots.Contains(component) || playerSlots.Contains(component))
                     continue;
-                if (component.bounds.Center.X <= chestRightEdge || component.bounds.Center.X >= chestRightEdge + 300)
+
+                bool isRightSide = component.bounds.Center.X > slotsRightEdge && component.bounds.Center.X < slotsRightEdge + 300;
+                bool isLeftSide = component.bounds.Center.X < slotsLeftEdge && component.bounds.Center.X > slotsLeftEdge - 300;
+                if (!isRightSide && !isLeftSide)
                     continue;
                 if (component.bounds.Center.Y < fullMinY || component.bounds.Center.Y > fullMaxY)
                     continue;
