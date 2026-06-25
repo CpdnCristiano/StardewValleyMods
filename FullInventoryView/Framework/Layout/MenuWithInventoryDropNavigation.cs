@@ -1,0 +1,172 @@
+using StardewValley.Menus;
+
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
+{
+    internal static class MenuWithInventoryDropNavigation
+    {
+        private const int DropItemInvisibleButtonId = 107;
+
+        public static void Preserve(IClickableMenu menu, IEnumerable<InventoryMenu> inventoryMenus)
+        {
+            if (menu is not MenuWithInventory menuWithInventory)
+                return;
+
+            var dropButton = menuWithInventory.dropItemInvisibleButton;
+            if (dropButton == null)
+                return;
+
+            dropButton.myID = DropItemInvisibleButtonId;
+            menu.allClickableComponents ??= new List<ClickableComponent>();
+            if (!menu.allClickableComponents.Contains(dropButton))
+                menu.allClickableComponents.Add(dropButton);
+
+            foreach (var inventoryMenu in inventoryMenus.Where(m => m?.inventory != null))
+            {
+                PreserveForInventoryMenu(menu, inventoryMenu, dropButton);
+            }
+        }
+
+        private static void PreserveForInventoryMenu(
+            IClickableMenu menu,
+            InventoryMenu inventoryMenu,
+            ClickableComponent dropButton
+        )
+        {
+            var slots = inventoryMenu.inventory?.Where(c => c != null).ToList();
+            if (slots == null || slots.Count == 0)
+                return;
+
+            var firstSlot = slots[0];
+            var leftSideButtons = FindLeftSideButtons(menu, slots, dropButton);
+
+            if (leftSideButtons.Count > 0)
+            {
+                WireDropThroughLeftSideButtons(dropButton, firstSlot, leftSideButtons);
+                return;
+            }
+
+            // Vanilla maps the first inventory slot directly to the invisible drop target.
+            // Keep that behavior whenever there is no left-side scroll/button column between
+            // the slot and the drop area.
+            firstSlot.leftNeighborID = dropButton.myID;
+            dropButton.rightNeighborID = firstSlot.myID;
+        }
+
+        private static List<ClickableComponent> FindLeftSideButtons(
+            IClickableMenu menu,
+            List<ClickableComponent> slots,
+            ClickableComponent dropButton
+        )
+        {
+            if (menu.allClickableComponents == null || slots.Count == 0)
+                return new List<ClickableComponent>();
+
+            int slotsLeft = slots.Min(s => s.bounds.Left);
+            int slotsTop = slots.Min(s => s.bounds.Top) - 24;
+            int slotsBottom = slots.Max(s => s.bounds.Bottom) + 24;
+            var slotSet = new HashSet<ClickableComponent>(slots);
+
+            return menu
+                .allClickableComponents
+                .Where(c =>
+                    c != null
+                    && c != dropButton
+                    && !slotSet.Contains(c)
+                    && c != menu.upperRightCloseButton
+                    && c.name != "upperRightCloseButton"
+                    && c.bounds.Center.X < slotsLeft
+                    && c.bounds.Center.X > slotsLeft - 360
+                    && c.bounds.Center.Y >= slotsTop
+                    && c.bounds.Center.Y <= slotsBottom
+                )
+                .Distinct()
+                .OrderBy(c => c.bounds.Center.X)
+                .ThenBy(c => c.bounds.Center.Y)
+                .ToList();
+        }
+
+        private static void WireDropThroughLeftSideButtons(
+            ClickableComponent dropButton,
+            ClickableComponent firstSlot,
+            List<ClickableComponent> leftSideButtons
+        )
+        {
+            foreach (var button in leftSideButtons)
+            {
+                if (button.myID == -1)
+                    button.myID = 170000 + leftSideButtons.IndexOf(button);
+            }
+
+            var outerLeftColumn = GroupColumns(leftSideButtons, 24)
+                .OrderBy(column => column.Average(c => c.bounds.Center.X))
+                .FirstOrDefault();
+
+            if (outerLeftColumn == null || outerLeftColumn.Count == 0)
+            {
+                firstSlot.leftNeighborID = dropButton.myID;
+                dropButton.rightNeighborID = firstSlot.myID;
+                return;
+            }
+
+            // If the left-side arrows/buttons take over the slot's LEFT navigation, the drop
+            // target must become the next LEFT step from the outermost left column. This keeps
+            // both paths reachable:
+            //   slot 0 -> left side column -> drop area
+            // instead of letting the side column swallow access to the drop area.
+            foreach (var button in outerLeftColumn)
+            {
+                button.leftNeighborID = dropButton.myID;
+            }
+
+            var returnTarget = FindClosestByY(outerLeftColumn, dropButton.bounds.Center.Y)
+                ?? FindClosestByY(leftSideButtons, firstSlot.bounds.Center.Y)
+                ?? firstSlot;
+            dropButton.rightNeighborID = returnTarget.myID;
+        }
+
+        private static List<List<ClickableComponent>> GroupColumns(
+            List<ClickableComponent> buttons,
+            int tolerance
+        )
+        {
+            var columns = new List<List<ClickableComponent>>();
+            foreach (var button in buttons)
+            {
+                var column = columns.FirstOrDefault(c =>
+                    System.Math.Abs(c[0].bounds.Center.X - button.bounds.Center.X) <= tolerance
+                );
+                if (column == null)
+                {
+                    column = new List<ClickableComponent>();
+                    columns.Add(column);
+                }
+                column.Add(button);
+            }
+
+            foreach (var column in columns)
+                column.Sort((a, b) => a.bounds.Center.Y.CompareTo(b.bounds.Center.Y));
+
+            return columns;
+        }
+
+        private static ClickableComponent? FindClosestByY(
+            IEnumerable<ClickableComponent> components,
+            int centerY
+        )
+        {
+            ClickableComponent? closest = null;
+            int bestDistance = int.MaxValue;
+            foreach (var component in components)
+            {
+                int distance = System.Math.Abs(component.bounds.Center.Y - centerY);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    closest = component;
+                }
+            }
+
+            return closest;
+        }
+    }
+}

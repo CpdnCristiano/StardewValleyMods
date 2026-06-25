@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
@@ -9,9 +6,9 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 {
-    internal static class InventoryMenuPatcherHelpers
+    internal static class InventoryMenuLayoutHelpers
     {
         public static bool DrawCurrencyPrefix(
             ShopMenu menu,
@@ -72,7 +69,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         i + 6,
                         new CodeInstruction(
                             OpCodes.Call,
-                            AccessTools.Method(typeof(InventoryMenuPatcher), "GetExtraHeight")
+                            AccessTools.Method(typeof(CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher.InventoryMenuPatcher), "GetExtraHeight")
                         )
                     );
                     codes.Insert(i + 7, new CodeInstruction(OpCodes.Add));
@@ -119,7 +116,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     result.Add(
                         new CodeInstruction(
                             OpCodes.Call,
-                            AccessTools.Method(typeof(InventoryMenuPatcher), "GetExtraHeight")
+                            AccessTools.Method(typeof(CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher.InventoryMenuPatcher), "GetExtraHeight")
                         )
                     );
                     result.Add(new CodeInstruction(OpCodes.Add));
@@ -151,8 +148,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public static void AdjustShopMenuScrollLayout(
             ShopMenu menu,
-            FieldInfo scrollBarRunnerField,
-            MethodInfo setScrollBarToCurrentIndexMethod
+            FieldInfo scrollBarRunnerField
         )
         {
             if (menu?.upArrow == null || menu.downArrow == null || menu.scrollBar == null)

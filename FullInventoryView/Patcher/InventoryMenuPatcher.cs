@@ -1,11 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using CpdnCristiano.StardewValleyMod.Common.Log;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Collections;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Reflection;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.State;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -20,120 +19,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
     internal class InventoryMenuPatcher : BasePatcher
     {
-        private const int DEFAULT_ROW_HEIGHT = 64;
-        private const int DEFAULT_COLUMN_COUNT = 12;
-        private const int DEFAULT_ROW_COUNT = 3;
-        private const int MAX_ROW_COUNT = 7;
-        private const int DEFAULT_MAX_ITEMS = 36;
-
         private const int ArrowIdUp = 11001;
         private const int ArrowIdDown = 11002;
 
         private static readonly ConditionalWeakTable<InventoryMenu, GridViewport> GridViewports =
             new();
-        private static readonly ConditionalWeakTable<IClickableMenu, BoxedInt> MenuOriginalXs =
-            new();
         private static readonly ConditionalWeakTable<IClickableMenu, BoxedInt> ChestLayoutHashes =
             new();
-        private static readonly ConditionalWeakTable<
-            IClickableMenu,
-            BoxedInt
-        > ChestLayoutLoggedHashes = new();
         private static readonly ConditionalWeakTable<
             IClickableMenu,
             MenuCachedFields
         > MenuFieldsCache = new();
 
-        private sealed class MenuCachedFields
-        {
-            public ClickableComponent? ColorBtn;
-            public ClickableComponent? FillBtn;
-            public ClickableComponent? OrganizeBtn;
-            public ClickableComponent? SpecialBtn;
-            public ClickableComponent? OkBtn;
-            public ClickableComponent? TrashBtn;
-            public DiscreteColorPicker? ColorPicker;
-            public ClickableTextureComponent? PickerToggle;
-        }
-
-        private sealed class BoxedInt
-        {
-            public int Value;
-
-            public BoxedInt(int value) => Value = value;
-        }
-
-        private static readonly FieldInfo InventoryField = AccessTools.Field(
-            typeof(InventoryMenu),
-            "inventory"
-        );
-        private static readonly FieldInfo ActualInventoryField = AccessTools.Field(
-            typeof(InventoryMenu),
-            "actualInventory"
-        );
-        private static readonly FieldInfo InventoryPageInventoryField = AccessTools.Field(
-            typeof(InventoryPage),
-            "inventory"
-        );
-        private static readonly FieldInfo InventoryPageOrganizeButtonField = AccessTools.Field(
-            typeof(InventoryPage),
-            "organizeButton"
-        );
-        private static readonly FieldInfo ItemGrabMenuColorPickerField = AccessTools.Field(
-            typeof(ItemGrabMenu),
-            "colorPicker"
-        );
-        private static readonly FieldInfo DiscreteColorPickerToggleButtonField = AccessTools.Field(
-            typeof(DiscreteColorPicker),
-            "colorPickerToggleButton"
-        );
-        private static readonly FieldInfo ShopMenuScrollBarRunnerField = AccessTools.Field(
-            typeof(ShopMenu),
-            "scrollBarRunner"
-        );
-        private static readonly MethodInfo? ShopMenuSetScrollBarToCurrentIndexMethod =
-            AccessTools.Method(typeof(ShopMenu), "setScrollBarToCurrentIndex");
-
-        private static readonly Rectangle UpArrowSourceRect = new(421, 459, 11, 12);
-        private static readonly Rectangle DownArrowSourceRect = new(421, 472, 11, 12);
         public static IClickableMenu? CurrentParentMenu = null;
-
-        private static int GetDynamicMaxRows()
-        {
-            int reservedHeight = 500;
-            int availableHeight = Game1.uiViewport.Height - reservedHeight;
-            int maxRows = availableHeight / DEFAULT_ROW_HEIGHT;
-            return Math.Clamp(maxRows, DEFAULT_ROW_COUNT, MAX_ROW_COUNT);
-        }
-
-        private static int GetRows()
-        {
-            if (Game1.player.maxItems.Value <= DEFAULT_MAX_ITEMS)
-            {
-                return DEFAULT_ROW_COUNT;
-            }
-            int maxAllowed = GetDynamicMaxRows();
-            int rows = Game1.player.maxItems.Value / DEFAULT_COLUMN_COUNT;
-            return Math.Min(rows, maxAllowed);
-        }
-
-        private static int GetTotalRows(IList<Item> inventory)
-        {
-            return Math.Max(0, (inventory.Count + DEFAULT_COLUMN_COUNT - 1) / DEFAULT_COLUMN_COUNT);
-        }
-
-        private static int GetExtraRow()
-        {
-            return Math.Max(0, GetRows() - DEFAULT_ROW_COUNT);
-        }
 
         public static int GetExtraHeight()
         {
-            int extraRows = GetExtraRow();
-            if (extraRows <= 0)
-                return 0;
-            return (extraRows * DEFAULT_ROW_HEIGHT)
-                + ((extraRows - 1) * IClickableMenu.spaceBetweenTabs);
+            return InventoryGridMetrics.GetExtraHeight();
         }
 
         public static int GetDoubleExtraHeight()
@@ -143,11 +45,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public static int GetBillboardOffset()
         {
-            int extra = GetExtraHeight();
-            if (extra <= 0)
-                return 0;
+            return InventoryGridMetrics.GetBillboardOffset();
+        }
 
-            return extra - DEFAULT_ROW_HEIGHT;
+        private static int GetExtraRow()
+        {
+            return InventoryGridMetrics.GetExtraRow();
         }
 
         public override void Apply(Harmony harmony, IMonitor monitor)
@@ -598,10 +501,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             if (activeComponents == null || activeComponents.Count == 0)
                 return;
-            if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu)
+            if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return;
             if (
-                InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots
+                StardewMenuFields.Inventory.GetValue(inventoryMenu) is not List<ClickableComponent> slots
                 || slots.Count == 0
             )
                 return;
@@ -780,16 +683,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             // Pre-calcula os slots mais à direita da grade do inventário
             var rightmostSlots = new List<ClickableComponent>();
-            for (int idx = DEFAULT_COLUMN_COUNT - 1; idx < slots.Count; idx += DEFAULT_COLUMN_COUNT)
+            for (int idx = InventoryGridMetrics.DefaultColumnCount - 1; idx < slots.Count; idx += InventoryGridMetrics.DefaultColumnCount)
             {
                 rightmostSlots.Add(slots[idx]);
             }
 
             // Pre-calcula os slots da última linha do inventário
-            int visibleRows = slots.Count / DEFAULT_COLUMN_COUNT;
-            int lastRowStart = (visibleRows - 1) * DEFAULT_COLUMN_COUNT;
+            int visibleRows = slots.Count / InventoryGridMetrics.DefaultColumnCount;
+            int lastRowStart = (visibleRows - 1) * InventoryGridMetrics.DefaultColumnCount;
             var lastRowSlots = new List<ClickableComponent>();
-            for (int col = 0; col < DEFAULT_COLUMN_COUNT; col++)
+            for (int col = 0; col < InventoryGridMetrics.DefaultColumnCount; col++)
             {
                 int idx = lastRowStart + col;
                 if (idx < slots.Count)
@@ -814,6 +717,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         .ToList())
                     .ToList();
 
+                var upArrow = grid?.UpArrow;
+                var downArrow = grid?.DownArrow;
+
                 for (int colIndex = 0; colIndex < rightColumns.Count; colIndex++)
                 {
                     var column = rightColumns[colIndex];
@@ -823,7 +729,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     {
                         var comp = column[i];
 
-                        if (grid != null && comp == grid.UpArrow)
+                        if (upArrow != null && ReferenceEquals(comp, upArrow))
                         {
                             // InventoryPage: the up-arrow has no component above it. Pressing up
                             // here must stop instead of wrapping/descending into another button.
@@ -835,7 +741,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                             continue;
                         }
 
-                        if (grid != null && comp == grid.DownArrow)
+                        if (downArrow != null && ReferenceEquals(comp, downArrow))
                         {
                             var lastLogical = logicalColumn.LastOrDefault();
                             comp.upNeighborID = lastLogical != null ? lastLogical.myID : -1;
@@ -855,15 +761,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         {
                             if (logicalIndex > 0)
                                 comp.upNeighborID = logicalColumn[logicalIndex - 1].myID;
-                            else if (grid != null && column.Contains(grid.UpArrow))
-                                comp.upNeighborID = grid.UpArrow.myID;
+                            else if (upArrow != null && column.Contains(upArrow))
+                                comp.upNeighborID = upArrow.myID;
                             else
                                 comp.upNeighborID = -1;
 
                             if (logicalIndex < logicalColumn.Count - 1)
                                 comp.downNeighborID = logicalColumn[logicalIndex + 1].myID;
-                            else if (grid != null && showScrollButtons && column.Contains(grid.DownArrow))
-                                comp.downNeighborID = grid.DownArrow.myID;
+                            else if (downArrow != null && showScrollButtons && column.Contains(downArrow))
+                                comp.downNeighborID = downArrow.myID;
                             else if (page.trashCan != null)
                                 comp.downNeighborID = page.trashCan.myID;
                             else
@@ -1125,7 +1031,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static bool drawCurrencyPrefix(ShopMenu __instance, SpriteBatch b)
         {
-            return InventoryMenuPatcherHelpers.DrawCurrencyPrefix(
+            return InventoryMenuLayoutHelpers.DrawCurrencyPrefix(
                 __instance,
                 b,
                 GetExtraHeight,
@@ -1137,14 +1043,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             IEnumerable<CodeInstruction> instructions
         )
         {
-            return InventoryMenuPatcherHelpers.InjectExtraHeightIntoShopDraw(instructions);
+            return InventoryMenuLayoutHelpers.InjectExtraHeightIntoShopDraw(instructions);
         }
 
         public static IEnumerable<CodeInstruction> receiveLeftClickTranspiler(
             IEnumerable<CodeInstruction> instructions
         )
         {
-            return InventoryMenuPatcherHelpers.InjectExtraHeightIntoShopClick(instructions);
+            return InventoryMenuLayoutHelpers.InjectExtraHeightIntoShopClick(instructions);
         }
 
         private static void initializeShippingBinPostfix(ItemGrabMenu __instance)
@@ -1169,14 +1075,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 return;
             if (menu is ShopMenu shopMenu)
             {
-                InventoryMenuPatcherHelpers.AdjustShopMenuScrollLayout(
+                InventoryMenuLayoutHelpers.AdjustShopMenuScrollLayout(
                     shopMenu,
-                    ShopMenuScrollBarRunnerField,
-                    ShopMenuSetScrollBarToCurrentIndexMethod
+                    StardewMenuFields.ShopMenuScrollBarRunner
                 );
             }
 
-            var menus = InventoryMenuPatcherMenuHelpers.FindInventoryMenus(menu);
+            var menus = MenuComponentFinder.FindInventoryMenus(menu);
             if (menus.Count == 0)
                 return;
             var orderedMenus = menus
@@ -1200,10 +1105,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             int chestColumns = chestMenu.capacity / chestMenu.rows;
             if (chestColumns <= 0)
-                chestColumns = DEFAULT_COLUMN_COUNT;
+                chestColumns = InventoryGridMetrics.DefaultColumnCount;
             int playerColumns = playerMenu.capacity / playerMenu.rows;
             if (playerColumns <= 0)
-                playerColumns = DEFAULT_COLUMN_COUNT;
+                playerColumns = InventoryGridMetrics.DefaultColumnCount;
 
             var playerGrid = GridViewports.GetValue(playerMenu, m => new GridViewport(m));
             playerGrid.CustomArrowLayout = true;
@@ -1217,23 +1122,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 menu,
                 m =>
                 {
-                    var cBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(
+                    var cBtn = MenuComponentFinder.FindFieldContaining(
                         m,
                         "colorPickerToggleButton"
                     );
-                    var fBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(
+                    var fBtn = MenuComponentFinder.FindFieldContaining(
                         m,
                         "fillStacksButton"
                     );
                     var oBtn =
-                        InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "organizeButton")
-                        ?? InventoryMenuPatcherMenuHelpers.FindFieldContaining(
+                        MenuComponentFinder.FindFieldContaining(m, "organizeButton")
+                        ?? MenuComponentFinder.FindFieldContaining(
                             m,
                             "organizeStashButton"
                         );
-                    var oK = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "okButton");
-                    var sBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "specialButton");
-                    var tBtn = InventoryMenuPatcherMenuHelpers.FindFieldContaining(m, "trashCan");
+                    var oK = MenuComponentFinder.FindFieldContaining(m, "okButton");
+                    var sBtn = MenuComponentFinder.FindFieldContaining(m, "specialButton");
+                    var tBtn = MenuComponentFinder.FindFieldContaining(m, "trashCan");
 
                     if (
                         cBtn != null
@@ -1266,10 +1171,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     )
                         tBtn = null;
 
-                    var cPicker = InventoryMenuPatcherMenuHelpers.FindColorPicker(m);
+                    var cPicker = MenuComponentFinder.FindColorPicker(m);
                     var pToggle =
                         cPicker != null
-                            ? InventoryMenuPatcherMenuHelpers.FindColorPickerToggleButton(cPicker)
+                            ? MenuComponentFinder.FindColorPickerToggleButton(cPicker)
                             : null;
                     if (cBtn == null && pToggle != null)
                         cBtn = pToggle;
@@ -1296,12 +1201,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             var trashBtn = fields.TrashBtn;
             var pickerToggle = fields.PickerToggle;
             var colorPicker = fields.ColorPicker;
-            var preferredSide = InventoryMenuPatcherHelpers.GetPreferredSide(menu);
+            var preferredSide = InventoryMenuLayoutHelpers.GetPreferredSide(menu);
             int preferredSideOffsetPixels =
-                InventoryMenuPatcherHelpers.GetPreferredSideOffsetPixels(menu);
+                InventoryMenuLayoutHelpers.GetPreferredSideOffsetPixels(menu);
             int? arrowAnchorCenterXOverride = null;
             var arrowAnchorComponentOverride =
-                InventoryMenuPatcherHelpers.GetArrowAnchorComponentOverride(menu);
+                InventoryMenuLayoutHelpers.GetArrowAnchorComponentOverride(menu);
             int anchorCenterX =
                 (okBtn ?? trashBtn ?? organizeBtn ?? fillBtn ?? colorBtn ?? specialBtn)?.bounds.Center.X ?? 0;
             int layoutHash = ComputeChestLayoutHash(
@@ -1318,6 +1223,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 showScrollButtons,
                 menu.allClickableComponents?.Count ?? 0
             );
+
+            // Keep the vanilla drop-item target reachable even when the side-column layout
+            // did not change this frame. Other mods and populateClickableComponentList can
+            // rebuild neighbors after our last layout pass.
+            MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
+
             if (!UpdateCachedLayoutHash(menu, layoutHash))
                 return;
 
@@ -1348,6 +1259,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     ShowScrollButtons = showScrollButtons,
                 }
             );
+
+            MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
         }
 
         private static bool UpdateCachedLayoutHash(IClickableMenu menu, int hash)
@@ -1406,10 +1319,9 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void ShopMenuDrawPrefix(ShopMenu __instance, SpriteBatch b)
         {
-            InventoryMenuPatcherHelpers.AdjustShopMenuScrollLayout(
+            InventoryMenuLayoutHelpers.AdjustShopMenuScrollLayout(
                 __instance,
-                ShopMenuScrollBarRunnerField,
-                ShopMenuSetScrollBarToCurrentIndexMethod
+                StardewMenuFields.ShopMenuScrollBarRunner
             );
             RepositionAndWireSideButtons(__instance);
         }
@@ -1421,16 +1333,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void updatePositionPostfix(ShopMenu __instance)
         {
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
             {
                 int extraHeight = GetExtraHeight();
                 __instance.yPositionOnScreen -= extraHeight / 2;
             }
 
-            InventoryMenuPatcherHelpers.AdjustShopMenuScrollLayout(
+            InventoryMenuLayoutHelpers.AdjustShopMenuScrollLayout(
                 __instance,
-                ShopMenuScrollBarRunnerField,
-                ShopMenuSetScrollBarToCurrentIndexMethod
+                StardewMenuFields.ShopMenuScrollBarRunner
             );
         }
 
@@ -1441,7 +1352,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ref int y
         )
         {
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
             {
                 if (__instance is InventoryPage)
                 {
@@ -1476,7 +1387,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance is not (GameMenu or MenuWithInventory or ShopMenu or TailoringMenu))
                 return;
 
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
             {
                 if (__instance is GameMenu)
                 {
@@ -1487,7 +1398,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 {
                     int extraSpace = GetExtraHeight();
                     height += extraSpace;
-                    y -= extraSpace / 2 - DEFAULT_ROW_HEIGHT;
+                    y -= extraSpace / 2 - InventoryGridMetrics.DefaultRowHeight;
                 }
                 else
                 {
@@ -1526,72 +1437,20 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ref int rows
         )
         {
-            if (actualInventory is not null && actualInventory != Game1.player.Items)
-                return;
-
-            if (IsCalledFromMuseum())
-            {
-                rows = 3;
-                capacity = rows * DEFAULT_COLUMN_COUNT;
-                return;
-            }
-
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
-            {
-                if (CurrentParentMenu is ItemGrabMenu grabMenu)
-
-                {
-                    string nomeDaClasse = grabMenu.GetType().Name;
-
-                    if (nomeDaClasse == "HugeChestMenu")
-                    {
-                        rows = 4;
-                        capacity = rows * DEFAULT_COLUMN_COUNT;
-                        return;
-                    }
-
-                    var max = CurrentParentMenu.yPositionOnScreen + CurrentParentMenu.height - 192 - IClickableMenu.borderWidth - yPosition + 64;
-                    int space = IClickableMenu.spaceBetweenTabs;
-                    int rawRows = DEFAULT_ROW_HEIGHT + space;
-                    int adjustedMax = max + 2 * space;
-                    int maxLinhasQueCabem = adjustedMax / rawRows;
-                    rows = maxLinhasQueCabem;
-                    capacity = rows * DEFAULT_COLUMN_COUNT;
-                    return;
-                }
-
-                int dynamicMax = GetDynamicMaxRows();
-                if (rows > dynamicMax)
-                {
-                    rows = dynamicMax;
-                    capacity = rows * DEFAULT_COLUMN_COUNT;
-                }
-                else if (rows == DEFAULT_ROW_COUNT)
-                {
-                    if (playerInventory)
-                    {
-                        int extraSpace = GetExtraHeight();
-                        yPosition -= extraSpace;
-                    }
-                    rows = GetRows();
-                    capacity = rows * DEFAULT_COLUMN_COUNT;
-                }
-            }
-        }
-
-        private static int GetExtraHeightForRows(int rows)
-        {
-            int extraRows = Math.Max(0, rows - DEFAULT_ROW_COUNT);
-            if (extraRows <= 0)
-                return 0;
-
-            return (extraRows * DEFAULT_ROW_HEIGHT)
-                + ((extraRows - 1) * IClickableMenu.spaceBetweenTabs);
+            InventoryMenuConstructorLayout.Apply(
+                ref yPosition,
+                ref actualInventory,
+                ref playerInventory,
+                ref capacity,
+                ref rows,
+                CurrentParentMenu,
+                IsCalledFromMuseum()
+            );
         }
 
         private static void InventoryPagePrefix(ref int y, ref int height)
         {
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
             {
                 int extraSpace = GetExtraHeight();
                 height += extraSpace;
@@ -1607,12 +1466,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             // a later mouse click/rebuild.
             __instance.populateClickableComponentList();
             EnsureScrollButtons(__instance);
-            __instance.snapToDefaultClickableComponent();
         }
 
         private static void CraftingPagePrefix(ref int y, ref int height)
         {
-            if (Game1.player.maxItems.Value > DEFAULT_MAX_ITEMS)
+            if (Game1.player.maxItems.Value > InventoryGridMetrics.DefaultMaxItems)
             {
                 int extraSpace = GetExtraHeight();
                 height += extraSpace;
@@ -1624,7 +1482,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (Game1.player == null)
                 return;
 
-            if (ActualInventoryField.GetValue(__instance) is not IList<Item> currentInventory)
+            if (StardewMenuFields.ActualInventory.GetValue(__instance) is not IList<Item> currentInventory)
                 return;
             if (currentInventory is ScrollableInventoryList scrollList)
             {
@@ -1644,7 +1502,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             int columns = __instance.capacity / __instance.rows;
             if (columns <= 0)
-                columns = DEFAULT_COLUMN_COUNT;
+                columns = InventoryGridMetrics.DefaultColumnCount;
 
             int totalRows = Math.Max(0, (currentInventory.Count + columns - 1) / columns);
             int maxScrollRow = Math.Max(0, totalRows - __instance.rows);
@@ -1659,7 +1517,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 gridViewport.ScrollRow * columns,
                 __instance.capacity
             );
-            ActualInventoryField.SetValue(__instance, scrollableList);
+            StardewMenuFields.ActualInventory.SetValue(__instance, scrollableList);
 
             if (gridViewport.OriginalMaxItems == null)
             {
@@ -1685,14 +1543,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             if (grid.OriginalInventory is not null)
             {
-                ActualInventoryField.SetValue(__instance, grid.OriginalInventory);
+                StardewMenuFields.ActualInventory.SetValue(__instance, grid.OriginalInventory);
                 grid.OriginalInventory = null;
             }
         }
 
         private static void EnsureScrollButtons(InventoryPage page)
         {
-            if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu)
+            if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return;
             var grid = GridViewports.GetValue(inventoryMenu, m => new GridViewport(m));
 
@@ -1729,15 +1587,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         private static void LayoutScrollButtons(InventoryPage page, GridViewport grid)
         {
-            if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu)
+            if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return;
             if (
-                InventoryField.GetValue(inventoryMenu) is not List<ClickableComponent> slots
+                StardewMenuFields.Inventory.GetValue(inventoryMenu) is not List<ClickableComponent> slots
                 || slots.Count == 0
             )
                 return;
             var organizeButton =
-                InventoryPageOrganizeButtonField.GetValue(page) as ClickableTextureComponent;
+                StardewMenuFields.InventoryPageOrganizeButton.GetValue(page) as ClickableTextureComponent;
             bool showScrollButtons = InventoryPageShouldShowScrollButtons(page, inventoryMenu, grid);
             grid.LayoutInventoryPageButtons(page, slots, organizeButton, showScrollButtons);
         }
@@ -1752,7 +1610,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (items != null)
                 return items.Count > inventoryMenu.capacity;
 
-            if (ActualInventoryField.GetValue(inventoryMenu) is IList<Item> currentInventory)
+            if (StardewMenuFields.ActualInventory.GetValue(inventoryMenu) is IList<Item> currentInventory)
                 return currentInventory.Count > inventoryMenu.capacity;
 
             return Game1.player != null && Game1.player.maxItems.Value > inventoryMenu.capacity;
@@ -1765,16 +1623,18 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         )
         {
             page.allClickableComponents ??= new List<ClickableComponent>();
+            var upArrow = grid.UpArrow;
+            var downArrow = grid.DownArrow;
 
             if (enabled)
             {
-                AddClickableComponent(page, grid.UpArrow);
-                AddClickableComponent(page, grid.DownArrow);
+                AddClickableComponent(page, upArrow);
+                AddClickableComponent(page, downArrow);
             }
             else
             {
-                page.allClickableComponents.Remove(grid.UpArrow);
-                page.allClickableComponents.Remove(grid.DownArrow);
+                page.allClickableComponents.Remove(upArrow);
+                page.allClickableComponents.Remove(downArrow);
             }
 
             if (
@@ -1785,15 +1645,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             {
                 if (enabled)
                 {
-                    if (!gameMenu.allClickableComponents.Contains(grid.UpArrow))
-                        gameMenu.allClickableComponents.Add(grid.UpArrow);
-                    if (!gameMenu.allClickableComponents.Contains(grid.DownArrow))
-                        gameMenu.allClickableComponents.Add(grid.DownArrow);
+                    if (!gameMenu.allClickableComponents.Contains(upArrow))
+                        gameMenu.allClickableComponents.Add(upArrow);
+                    if (!gameMenu.allClickableComponents.Contains(downArrow))
+                        gameMenu.allClickableComponents.Add(downArrow);
                 }
                 else
                 {
-                    gameMenu.allClickableComponents.Remove(grid.UpArrow);
-                    gameMenu.allClickableComponents.Remove(grid.DownArrow);
+                    gameMenu.allClickableComponents.Remove(upArrow);
+                    gameMenu.allClickableComponents.Remove(downArrow);
                 }
             }
         }
@@ -1815,7 +1675,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance.GetCurrentPage() is not InventoryPage inventoryPage)
                 return true;
             if (
-                InventoryPageInventoryField.GetValue(inventoryPage)
+                StardewMenuFields.InventoryPageInventory.GetValue(inventoryPage)
                 is not InventoryMenu inventoryMenu
             )
                 return true;
@@ -1825,7 +1685,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 IList<Item>? items = grid.OriginalInventory ?? grid.FullInventory;
                 if (
                     items != null
-                    && InventoryMenuPatcherMenuHelpers.IsMouseTargetingInventoryArea(
+                    && MenuComponentFinder.IsMouseTargetingInventoryArea(
                         inventoryMenu,
                         grid,
                         Game1.getOldMouseX(),
@@ -1845,7 +1705,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance.GetCurrentPage() is not InventoryPage inventoryPage)
                 return;
             if (
-                InventoryPageInventoryField.GetValue(inventoryPage)
+                StardewMenuFields.InventoryPageInventory.GetValue(inventoryPage)
                 is not InventoryMenu inventoryMenu
             )
                 return;
@@ -1870,7 +1730,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 }
                 if (
                     items != null
-                    && InventoryMenuPatcherMenuHelpers.IsGamepadTargetingInventoryArea(
+                    && MenuComponentFinder.IsGamepadTargetingInventoryArea(
                         __instance,
                         inventoryMenu,
                         viewport
@@ -1882,32 +1742,16 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
         }
 
-        private static InventoryMenu? GetPlayerInventoryMenu(IClickableMenu menu)
-        {
-            if (menu == null)
-                return null;
-            FieldInfo? field = menu.GetType()
-                .GetField(
-                    "inventory",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
-                );
-            if (field != null && typeof(InventoryMenu).IsAssignableFrom(field.FieldType))
-            {
-                return field.GetValue(menu) as InventoryMenu;
-            }
-            return null;
-        }
-
         private static bool MenuReceiveScrollWheelActionPrefix(
             IClickableMenu __instance,
             int direction
         )
         {
-            var menus = InventoryMenuPatcherMenuHelpers.FindInventoryMenus(__instance);
+            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (
-                    InventoryMenuPatcherMenuHelpers.IsMouseTargetingInventoryArea(
+                    MenuComponentFinder.IsMouseTargetingInventoryArea(
                         menu,
                         GridViewports.TryGetValue(menu, out GridViewport? g) ? g : null,
                         Game1.getOldMouseX(),
@@ -1935,7 +1779,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             bool playSound
         )
         {
-            var menus = InventoryMenuPatcherMenuHelpers.FindInventoryMenus(__instance);
+            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
@@ -1957,7 +1801,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 RepositionAndWireSideButtons(__instance);
             }
 
-            var menus = InventoryMenuPatcherMenuHelpers.FindInventoryMenus(__instance);
+            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (GridViewports.TryGetValue(menu, out GridViewport? grid) && grid != null)
@@ -1969,7 +1813,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     }
                     if (
                         items != null
-                        && InventoryMenuPatcherMenuHelpers.IsGamepadTargetingInventoryArea(
+                        && MenuComponentFinder.IsGamepadTargetingInventoryArea(
                             __instance,
                             menu,
                             grid
@@ -2021,7 +1865,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (snapped == null)
                 return true;
 
-            var menus = InventoryMenuPatcherMenuHelpers.FindInventoryMenus(__instance);
+            var menus = MenuComponentFinder.FindInventoryMenus(__instance);
             foreach (var menu in menus)
             {
                 if (menu.inventory != null && menu.inventory.Contains(snapped))
@@ -2029,7 +1873,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                     int index = menu.inventory.IndexOf(snapped);
                     int columns = menu.capacity / menu.rows;
                     if (columns <= 0)
-                        columns = DEFAULT_COLUMN_COUNT;
+                        columns = InventoryGridMetrics.DefaultColumnCount;
 
                     int row = index / columns;
 
@@ -2144,11 +1988,11 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         )
         {
             state = null;
-            if (Game1.player?.maxItems.Value <= DEFAULT_MAX_ITEMS)
+            if (Game1.player?.maxItems.Value <= InventoryGridMetrics.DefaultMaxItems)
                 return false;
-            if (InventoryPageInventoryField.GetValue(page) is not InventoryMenu inventoryMenu)
+            if (StardewMenuFields.InventoryPageInventory.GetValue(page) is not InventoryMenu inventoryMenu)
                 return false;
-            if (ActualInventoryField.GetValue(inventoryMenu) is not IList<Item> actualInventory)
+            if (StardewMenuFields.ActualInventory.GetValue(inventoryMenu) is not IList<Item> actualInventory)
                 return false;
 
             IList<Item> fullInventory = actualInventory is ScrollableInventoryList scrollable
@@ -2156,7 +2000,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 : actualInventory;
             if (
                 fullInventory != (Game1.player?.Items)
-                || GetTotalRows(fullInventory) <= inventoryMenu.rows
+                || InventoryGridMetrics.GetTotalRows(fullInventory) <= inventoryMenu.rows
             )
                 return false;
 
@@ -2167,65 +2011,5 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return state is not null;
         }
 
-        private sealed class ScrollableInventoryList : IList<Item>
-        {
-            private readonly int _offset;
-            private readonly int _capacity;
-
-            public ScrollableInventoryList(IList<Item> underlying, int offset, int capacity)
-            {
-                Underlying = underlying;
-                _offset = offset;
-                _capacity = capacity;
-            }
-
-            public IList<Item> Underlying { get; }
-
-            public Item this[int index]
-            {
-                get => Underlying[_offset + index];
-                set => Underlying[_offset + index] = value;
-            }
-
-            public int Count => Math.Max(0, Math.Min(_capacity, Underlying.Count - _offset));
-            public bool IsReadOnly => Underlying.IsReadOnly;
-
-            public void Add(Item item) => throw new NotSupportedException();
-
-            public void Clear() => throw new NotSupportedException();
-
-            public bool Contains(Item item) => IndexOf(item) >= 0;
-
-            public void CopyTo(Item[] array, int arrayIndex)
-            {
-                for (int i = 0; i < Count; i++)
-                    array[arrayIndex + i] = this[i];
-            }
-
-            public IEnumerator<Item> GetEnumerator()
-            {
-                for (int i = 0; i < Count; i++)
-                    yield return this[i];
-            }
-
-            public int IndexOf(Item item)
-            {
-                for (int i = 0; i < Count; i++)
-                {
-                    if (Equals(this[i], item))
-                        return i;
-                }
-                return -1;
-            }
-
-            public void Insert(int index, Item item) => throw new NotSupportedException();
-
-            public bool Remove(Item item) => throw new NotSupportedException();
-
-            public void RemoveAt(int index) => throw new NotSupportedException();
-
-            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =>
-                GetEnumerator();
-        }
     }
 }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using CpdnCristiano.StardewValleyMod.Common.Log;
@@ -7,7 +5,6 @@ using CpdnCristiano.StardewValleyMod.Common.Patching;
 using HarmonyLib;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
-using StardewValley;
 using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
@@ -29,10 +26,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
             else
             {
-                monitor.Log(
-                    "Could not find UIInfoSuite2Alt ComputeBoundsAndDrawIcons method; skipping offset patch.",
-                    LogLevel.Warn
-                );
+                Log.Warn("Could not find UIInfoSuite2Alt ComputeBoundsAndDrawIcons method; skipping offset patch.");
             }
 
 

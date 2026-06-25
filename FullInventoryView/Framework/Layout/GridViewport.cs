@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 {
     public class GridViewport
     {
@@ -107,7 +104,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
             int columns = this.Menu.capacity / this.Menu.rows;
             if (columns <= 0)
-                columns = 12;
+                columns = InventoryGridMetrics.DefaultColumnCount;
 
             int lastColIndex = columns - 1;
             int bottomIndex = (this.Menu.rows - 1) * columns;
@@ -189,7 +186,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             ClickableComponent firstSlot = slots[0];
             int columns = this.Menu.capacity / this.Menu.rows;
             if (columns <= 0)
-                columns = 12;
+                columns = InventoryGridMetrics.DefaultColumnCount;
 
             int bottomSlotIndex = Math.Min(slots.Count - 1, (this.Menu.rows - 1) * columns);
             ClickableComponent lastRowAnchor = slots[bottomSlotIndex];
@@ -840,7 +837,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
         {
             int columns = this.Menu.capacity / this.Menu.rows;
             if (columns <= 0)
-                columns = 12;
+                columns = InventoryGridMetrics.DefaultColumnCount;
             return Math.Max(0, (items.Count + columns - 1) / columns);
         }
 

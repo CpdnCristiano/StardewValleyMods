@@ -69,10 +69,7 @@ public class ModEntry : Mod
     {
         if (StardewValley.Game1.player == null)
         {
-            this.Monitor.Log(
-                "Nenhum save carregado! Carregue um save antes de rodar o comando.",
-                LogLevel.Error
-            );
+            Log.Error("Nenhum save carregado! Carregue um save antes de rodar o comando.");
             return;
         }
 
@@ -83,9 +80,6 @@ public class ModEntry : Mod
         }
 
         StardewValley.Game1.player.maxItems.Value = size;
-        this.Monitor.Log(
-            $"Inventário alterado com sucesso para {size} slots ({size / 12} linhas)!",
-            LogLevel.Info
-        );
+        Log.Info($"Inventário alterado com sucesso para {size} slots ({size / 12} linhas)!");
     }
 }

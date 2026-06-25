@@ -1,12 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using Microsoft.Xna.Framework;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
 using StardewValley.Menus;
 
-namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
+namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Reflection
 {
-    internal static class InventoryMenuPatcherMenuHelpers
+    internal static class MenuComponentFinder
     {
         public static ClickableComponent? FindFieldContaining(object obj, string substring)
         {

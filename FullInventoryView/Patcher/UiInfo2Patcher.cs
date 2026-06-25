@@ -16,10 +16,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             );
             if (original is null)
             {
-                monitor.Log(
-                    "Could not find UIInfoSuite2 DrawBillboard method; skipping patch.",
-                    LogLevel.Warn
-                );
+                Log.Warn("Could not find UIInfoSuite2 DrawBillboard method; skipping patch.");
                 return;
             }
             harmony.Patch(
