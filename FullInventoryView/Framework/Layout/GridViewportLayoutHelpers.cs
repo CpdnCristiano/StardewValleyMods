@@ -264,6 +264,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             {
                 if (component == null)
                     continue;
+                if (IsUnidentifiedNonVisualComponent(component))
+                    continue;
                 if (
                     component == excludedButton
                     || component == upArrow
@@ -288,6 +290,17 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             }
 
             return buttons.Distinct().OrderBy(component => component.bounds.Center.Y).ToList();
+        }
+
+        private static bool IsUnidentifiedNonVisualComponent(ClickableComponent component)
+        {
+            // -500 is a default/unassigned component ID in Stardew menus. By itself it is not
+            // a button identity. Only skip it when the component also has no visual texture and
+            // no name, which matches the invisible helper/drop-area components that should not
+            // be moved as side buttons.
+            return component.myID == -500
+                && component is not ClickableTextureComponent
+                && string.IsNullOrWhiteSpace(component.name);
         }
     }
 }

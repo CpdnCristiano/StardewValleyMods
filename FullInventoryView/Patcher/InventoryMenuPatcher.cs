@@ -15,6 +15,7 @@ using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Inventories;
 using StardewValley.Menus;
+using StardewValley.Objects;
 using static StardewValley.Menus.InventoryMenu;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
@@ -44,6 +45,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 
         public static IClickableMenu? CurrentParentMenu = null;
 
+
         private static string DescribeComponent(ClickableComponent? component)
         {
             if (component == null)
@@ -65,6 +67,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 return;
 
             bool inheritedState = TryInheritChestLayoutState(newMenu, oldMenu, "MenuChanged");
+
+            // ItemGrabMenu is the sensitive case: moving items or pressing Organize can create
+            // a new ItemGrabMenu from the previous one. When that happens, don't run a full
+            // relayout again; just hand off the existing geometry/cache to the new menu so the
+            // side buttons don't visibly jump.
+            if (newMenu is ItemGrabMenu && inheritedState)
+            {
+                if (ApplyCachedChestLayout(newMenu, "MenuChanged:handoff"))
+                    return;
+            }
+
+            if (newMenu is ItemGrabMenu)
+            {
+                RepositionAndWireSideButtons(newMenu, "MenuChanged", force: true);
+                return;
+            }
+
             ScheduleChestLayout(newMenu, "MenuChanged", 2, resetHash: !inheritedState);
             RepositionAndWireSideButtons(newMenu, "MenuChanged", force: true);
         }
@@ -140,7 +159,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             bool resetHash = false
         )
         {
-            if (!IsSideLayoutMenu(menu))
+            if (!IsSideLayoutMenu(menu) || passes <= 0)
                 return;
 
             var state = GetChestLayoutState(menu);
@@ -260,6 +279,26 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 postfix: this.GetHarmonyMethod(nameof(initializeShippingBinPostfix))
             );
 
+            // RepositionSideButtons is called by setSourceItem (triggered by behaviorOnItemGrab
+            // on every item click/transfer) and by gameWindowSizeChanged — both without calling
+            // populateClickableComponentList. This means our side-button layout gets silently
+            // overwritten back to vanilla positions after every item grab, with no event for
+            // the mod to observe. Patching it directly is the only reliable intercept point.
+            harmony.Patch(
+                original: this.RequireMethod<ItemGrabMenu>(
+                    nameof(ItemGrabMenu.RepositionSideButtons)
+                ),
+                postfix: this.GetHarmonyMethod(nameof(ItemGrabMenuRepositionSideButtonsPostfix))
+            );
+
+            SafePatchMethod(
+                harmony,
+                typeof(ItemGrabMenu),
+                nameof(ItemGrabMenu.gameWindowSizeChanged),
+                new Type[] { typeof(Rectangle), typeof(Rectangle) },
+                postfixName: nameof(ItemGrabMenuRepositionSideButtonsPostfix)
+            );
+
             harmony.Patch(
                 original: this.RequireMethod<ShopMenu>(
                     nameof(ShopMenu.draw),
@@ -320,6 +359,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 nameof(ItemGrabMenu.receiveLeftClick),
                 new Type[] { typeof(int), typeof(int), typeof(bool) },
                 prefixName: nameof(MenuReceiveLeftClickPrefix)
+            );
+            SafePatchMethod(
+                harmony,
+                typeof(ItemGrabMenu),
+                nameof(ItemGrabMenu.receiveRightClick),
+                new Type[] { typeof(int), typeof(int), typeof(bool) },
+                prefixName: nameof(MenuReceiveRightClickPrefix)
             );
             SafePatchMethod(
                 harmony,
@@ -598,6 +644,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             if (__instance is InventoryPage page)
             {
                 EnsureScrollButtons(page);
+                return;
+            }
+
+            if (__instance is ItemGrabMenu)
+            {
+                bool inherited = TryInheritChestLayoutStateFromActiveMenu(
+                    __instance,
+                    "populateClickableComponentList"
+                );
+
+                if (inherited && ApplyCachedChestLayout(__instance, "populateClickableComponentList:handoff"))
+                    return;
+
+                var state = GetChestLayoutState(__instance);
+                if (state.SideButtonTargets.Count > 0 && ApplyCachedChestLayout(__instance, "populateClickableComponentList:cache"))
+                    return;
+
+                RepositionAndWireSideButtons(__instance, "populateClickableComponentList", force: true);
                 return;
             }
 
@@ -1286,6 +1350,23 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
         }
 
+        // Called after ItemGrabMenu.RepositionSideButtons() and ItemGrabMenu.gameWindowSizeChanged().
+        // Both reset button positions to vanilla coordinates without calling
+        // populateClickableComponentList, so our layout cache is never invalidated and the
+        // buttons stay at vanilla positions until the next frame where the pending-passes update
+        // fires. This postfix re-applies the cached layout immediately so there is no visible
+        // flash of vanilla positions.
+        private static void ItemGrabMenuRepositionSideButtonsPostfix(ItemGrabMenu __instance)
+        {
+            if (!IsSideLayoutMenu(__instance))
+                return;
+
+            // Only re-apply if we already have a cached layout for this menu. Vanilla calls
+            // RepositionSideButtons during normal item-transfer flows; running a full relayout
+            // there is exactly what causes the visible jump.
+            ApplyCachedChestLayout(__instance, "RepositionSideButtons:cache");
+        }
+
         private static void IClickableMenuUpdatePositionPostfix(IClickableMenu __instance)
         {
             if (IsSideLayoutMenu(__instance))
@@ -1507,6 +1588,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 );
             var oK = MenuComponentFinder.FindFieldContaining(menu, "okButton");
             var sBtn = MenuComponentFinder.FindFieldContaining(menu, "specialButton");
+            var jBtn = MenuComponentFinder.FindFieldContaining(menu, "junimoNoteIcon");
             var tBtn = MenuComponentFinder.FindFieldContaining(menu, "trashCan");
 
             if (
@@ -1539,6 +1621,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                 && (tBtn == menu.upperRightCloseButton || tBtn.name == "upperRightCloseButton")
             )
                 tBtn = null;
+            if (
+                jBtn != null
+                && (jBtn == menu.upperRightCloseButton || jBtn.name == "upperRightCloseButton")
+            )
+                jBtn = null;
+            if (sBtn == null)
+                sBtn = jBtn;
 
             var cPicker = MenuComponentFinder.FindColorPicker(menu);
             var pToggle =
@@ -1604,6 +1693,81 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             state.LastPlayerMenuHash = playerMenu.GetHashCode();
         }
 
+        private static bool ApplyCachedChestLayout(IClickableMenu menu, string reason)
+        {
+            if (!IsSideLayoutMenu(menu))
+                return false;
+
+            var state = GetChestLayoutState(menu);
+            if (state.SideButtonTargets.Count == 0)
+                return false;
+
+            var orderedMenus = MenuComponentFinder.FindInventoryMenus(menu)
+                .Where(m => m?.inventory != null && m.inventory.Count > 0)
+                .OrderBy(m => m.yPositionOnScreen)
+                .ToList();
+            if (orderedMenus.Count == 0)
+                return false;
+
+            var playerMenu = orderedMenus.Last();
+            var playerGrid = GridViewports.GetValue(playerMenu, m => new GridViewport(m));
+            playerGrid.CustomArrowLayout = true;
+            playerGrid.UpArrow.myID = ArrowIdUp;
+            playerGrid.DownArrow.myID = ArrowIdDown;
+
+            RestoreChestPlayerScroll(state, playerGrid, playerMenu, reason);
+            IList<Item>? playerSource = RefreshInventorySource(playerMenu, playerGrid);
+            bool showScrollButtons = playerSource != null
+                && InventoryGridMetrics.GetEffectiveSlotCount(
+                    playerSource,
+                    ReferenceEquals(playerSource, Game1.player?.Items)
+                ) > playerMenu.capacity;
+
+            playerGrid.SetScrollButtonsClickable(menu, showScrollButtons);
+            playerGrid.ImportSideButtonTargets(state.SideButtonTargets);
+
+            var fields = BuildMenuCachedFields(menu);
+            EnsureFieldSideButtonsInClickableComponents(menu, fields);
+
+            bool applied = playerGrid.ApplyCachedSideButtonTargets(menu, reason);
+            if (fields.ColorPicker != null && fields.PickerToggle != null && fields.ColorBtn != null)
+                fields.PickerToggle.bounds = fields.ColorBtn.bounds;
+
+            MenuWithInventoryDropNavigation.Preserve(menu, orderedMenus);
+            if (playerSource != null && ReferenceEquals(playerSource, Game1.player?.Items))
+                RememberChestPlayerScroll(state, playerGrid, playerMenu, playerSource);
+
+            return applied;
+        }
+
+        private static void EnsureFieldSideButtonsInClickableComponents(
+            IClickableMenu menu,
+            MenuCachedFields fields
+        )
+        {
+            menu.allClickableComponents ??= new List<ClickableComponent>();
+            foreach (var button in EnumerateFieldSideButtons(fields).Distinct())
+            {
+                if (button == null)
+                    continue;
+                if (button == menu.upperRightCloseButton || button.name == "upperRightCloseButton")
+                    continue;
+                if (!menu.allClickableComponents.Contains(button))
+                    menu.allClickableComponents.Add(button);
+            }
+        }
+
+        private static IEnumerable<ClickableComponent?> EnumerateFieldSideButtons(MenuCachedFields fields)
+        {
+            yield return fields.ColorBtn;
+            yield return fields.FillBtn;
+            yield return fields.OrganizeBtn;
+            yield return fields.SpecialBtn;
+            yield return fields.OkBtn;
+            yield return fields.TrashBtn;
+            yield return fields.PickerToggle;
+        }
+
         private static int ComputeChestLayoutHash(
             int anchorCenterX,
             List<ClickableComponent> chestTopColumn,
@@ -1652,7 +1816,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
 
             hash.Add(1);
-            hash.Add(button.myID);
+            // Intentionally exclude myID: the Stardew 1.6 ItemGrabMenu rebuilds itself from
+            // scratch on every item transfer (new ItemGrabMenu(...) via chest callbacks), and
+            // some buttons — notably the colorPickerToggleButton found via FindColorPicker —
+            // get assigned different myID values between the original construction and the
+            // reconstructed menu, even though their visual position/size is identical.
+            // Including myID here causes a layout hash miss on every X-button press, forcing
+            // a full relayout and button reposition when nothing visible actually changed.
+            // The name, width, and height are sufficient to distinguish button "presence" for
+            // layout-change detection purposes.
             hash.Add(button.name ?? string.Empty);
             hash.Add(button.bounds.Width);
             hash.Add(button.bounds.Height);
@@ -2212,6 +2384,503 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return true;
         }
 
+        private static bool IsPlainChestItemGrabMenu(ItemGrabMenu menu, out Chest? chest)
+        {
+            chest = null;
+
+            // Do not intercept custom ItemGrabMenu subclasses. HugeChestMenu already does the
+            // correct thing by overriding item interactions manually; this guard keeps us from
+            // fighting custom menus from other mods.
+            if (menu.GetType() != typeof(ItemGrabMenu))
+                return false;
+
+            if (menu.shippingBin || menu.ItemsToGrabMenu == null || menu.inventory == null)
+                return false;
+
+            chest = menu.sourceItem as Chest ?? menu.context as Chest;
+            return chest != null && menu.source == ItemGrabMenu.source_chest;
+        }
+
+        private static bool TryHandleChestManualLeftClick(
+            ItemGrabMenu menu,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (!IsPlainChestItemGrabMenu(menu, out Chest? chest) || chest == null)
+                return false;
+
+            if (TryHandleChestStructuralLeftClick(menu, chest, x, y, playSound))
+                return true;
+
+            if (IsPointInInventoryMenu(menu.ItemsToGrabMenu, x, y))
+                return TryHandleChestInventoryLeftClick(menu, chest, x, y, playSound);
+
+            if (IsPointInInventoryMenu(menu.inventory, x, y))
+                return TryHandlePlayerInventoryLeftClick(menu, chest, x, y, playSound);
+
+            return false;
+        }
+
+        private static bool TryHandleChestManualRightClick(
+            ItemGrabMenu menu,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (!IsPlainChestItemGrabMenu(menu, out Chest? chest) || chest == null)
+                return false;
+
+            // The vanilla ItemGrabMenu.receiveRightClick path can also call setSourceItem.
+            // Intercept both grids so right click / controller X can move one item without
+            // rebuilding the ItemGrabMenu.
+            if (IsPointInInventoryMenu(menu.ItemsToGrabMenu, x, y))
+                return TryHandleChestInventoryRightClick(menu, chest, x, y, playSound);
+
+            if (IsPointInInventoryMenu(menu.inventory, x, y))
+                return TryHandlePlayerInventoryRightClick(menu, chest, x, y, playSound);
+
+            return false;
+        }
+
+        private static bool IsBaseReceiveGamePadDispatchForItemGrabMenu(
+            IClickableMenu menu,
+            MethodBase originalMethod
+        )
+        {
+            // We patch both ItemGrabMenu.receiveGamePadButton and IClickableMenu.receiveGamePadButton.
+            // Vanilla ItemGrabMenu.receiveGamePadButton calls base.receiveGamePadButton(button), so
+            // the same physical A/X press can reach this prefix twice: first on ItemGrabMenu, then
+            // again on the base IClickableMenu method. Manual chest transfers must only run on the
+            // ItemGrabMenu method itself; the base dispatch is allowed to continue vanilla behavior.
+            return menu is ItemGrabMenu && originalMethod.DeclaringType == typeof(IClickableMenu);
+        }
+
+        private static bool TryHandleChestManualGamePadButton(
+            ItemGrabMenu menu,
+            Buttons button
+        )
+        {
+            if (button is not (Buttons.A or Buttons.X))
+                return false;
+
+            if (!IsPlainChestItemGrabMenu(menu, out Chest? chest) || chest == null)
+                return false;
+
+            ClickableComponent? snapped = menu.currentlySnappedComponent;
+            if (snapped == null)
+                return false;
+
+            if (menu.organizeButton != null && ReferenceEquals(snapped, menu.organizeButton))
+            {
+                OrganizeChestWithoutRebuilding(menu);
+                return true;
+            }
+
+            if (menu.fillStacksButton != null && ReferenceEquals(snapped, menu.fillStacksButton))
+            {
+                menu.FillOutStacks();
+                Game1.playSound("Ship");
+                return true;
+            }
+
+            if (menu.ItemsToGrabMenu?.inventory != null && menu.ItemsToGrabMenu.inventory.Contains(snapped))
+            {
+                return button == Buttons.X
+                    ? TryHandleChestInventoryRightClick(menu, chest, snapped.bounds.Center.X, snapped.bounds.Center.Y, playSound: true)
+                    : TryHandleChestInventoryLeftClick(menu, chest, snapped.bounds.Center.X, snapped.bounds.Center.Y, playSound: true);
+            }
+
+            if (menu.inventory?.inventory != null && menu.inventory.inventory.Contains(snapped))
+            {
+                return button == Buttons.X
+                    ? TryHandlePlayerInventoryRightClick(menu, chest, snapped.bounds.Center.X, snapped.bounds.Center.Y, playSound: true)
+                    : TryHandlePlayerInventoryLeftClick(menu, chest, snapped.bounds.Center.X, snapped.bounds.Center.Y, playSound: true);
+            }
+
+            return false;
+        }
+
+        private static bool TryHandleChestStructuralLeftClick(
+            ItemGrabMenu menu,
+            Chest chest,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (menu.chestColorPicker != null && menu.chestColorPicker.visible)
+            {
+                Rectangle pickerBounds = new Rectangle(
+                    menu.chestColorPicker.xPositionOnScreen,
+                    menu.chestColorPicker.yPositionOnScreen,
+                    menu.chestColorPicker.width,
+                    menu.chestColorPicker.height
+                );
+                if (pickerBounds.Contains(x, y))
+                {
+                    menu.chestColorPicker.receiveLeftClick(x, y);
+                    chest.playerChoiceColor.Value = DiscreteColorPicker.getColorFromSelection(menu.chestColorPicker.colorSelection);
+                    return true;
+                }
+            }
+
+            if (menu.colorPickerToggleButton != null && menu.colorPickerToggleButton.containsPoint(x, y))
+            {
+                Game1.player.showChestColorPicker = !Game1.player.showChestColorPicker;
+                if (menu.chestColorPicker != null)
+                    menu.chestColorPicker.visible = Game1.player.showChestColorPicker;
+                Game1.playSound("drumkit6");
+                return true;
+            }
+
+            if (menu.organizeButton != null && menu.organizeButton.containsPoint(x, y))
+            {
+                OrganizeChestWithoutRebuilding(menu);
+                return true;
+            }
+
+            if (menu.fillStacksButton != null && menu.fillStacksButton.containsPoint(x, y))
+            {
+                menu.FillOutStacks();
+                Game1.playSound("Ship");
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void OrganizeChestWithoutRebuilding(ItemGrabMenu menu)
+        {
+            if (menu.ItemsToGrabMenu?.actualInventory == null)
+                return;
+
+            ItemGrabMenu.organizeItemsInList(menu.ItemsToGrabMenu.actualInventory);
+            Game1.playSound("Ship");
+
+            // Keep the current snapped component stable. Vanilla rebuilds with new ItemGrabMenu(this)
+            // and then copies the snapped ID; we avoid the rebuild and leave the same component alive.
+            if (Game1.options.SnappyMenus && menu.currentlySnappedComponent != null)
+                menu.snapCursorToCurrentSnappedComponent();
+        }
+
+        private static bool TryHandleChestInventoryLeftClick(
+            ItemGrabMenu menu,
+            Chest chest,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (menu.ItemsToGrabMenu == null)
+                return false;
+
+            int slotIndex = GetInventorySlotIndex(menu.ItemsToGrabMenu, x, y);
+            if (slotIndex < 0)
+                return true;
+
+            IList<Item?> chestItems = GetChestItems(menu, chest);
+
+            // Same intent as HugeChestMenu.receiveLeftClick: a left click / A button moves the
+            // whole held stack into the chest, or moves the whole clicked chest stack to the player.
+            // Do not call ItemGrabMenu.receiveLeftClick here; that vanilla path can rebuild
+            // ItemGrabMenu and break the side-button layout.
+            if (menu.heldItem != null)
+            {
+                Item held = menu.heldItem;
+                Item? target = slotIndex < chestItems.Count ? chestItems[slotIndex] : null;
+
+                if (target != null && target.canStackWith(held))
+                {
+                    int remaining = target.addToStack(held);
+                    menu.heldItem = remaining <= 0 ? null : held;
+                    if (menu.heldItem != null)
+                        menu.heldItem.Stack = remaining;
+                }
+                else
+                {
+                    menu.heldItem = chest.addItem(held);
+                }
+
+                if (playSound)
+                    Game1.playSound("coin");
+                return true;
+            }
+
+            if (!menu.showReceivingMenu)
+                return true;
+
+            if (slotIndex >= chestItems.Count || chestItems[slotIndex] == null)
+                return true;
+
+            Item item = chestItems[slotIndex]!;
+            chestItems.RemoveAt(slotIndex);
+
+            Item? leftover = Game1.player.addItemToInventory(item);
+            if (leftover != null)
+                leftover = chest.addItem(leftover);
+            if (leftover != null)
+                menu.heldItem = leftover;
+
+            if (playSound)
+                Game1.playSound("coin");
+            return true;
+        }
+
+        private static bool TryHandleChestInventoryRightClick(
+            ItemGrabMenu menu,
+            Chest chest,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (menu.ItemsToGrabMenu == null)
+                return false;
+
+            int slotIndex = GetInventorySlotIndex(menu.ItemsToGrabMenu, x, y);
+            if (slotIndex < 0)
+                return true;
+
+            IList<Item?> chestItems = GetChestItems(menu, chest);
+
+            // Right click / X button moves exactly one item. This is the difference that was
+            // missing before: A = whole stack, X = one item.
+            if (menu.heldItem != null)
+            {
+                if (menu.heldItem.Stack <= 1)
+                {
+                    menu.heldItem = chest.addItem(menu.heldItem);
+                }
+                else
+                {
+                    Item one = menu.heldItem.getOne();
+                    int movedFromHeldStack = Math.Max(1, Math.Min(one.Stack, menu.heldItem.Stack));
+                    Item? leftover = chest.addItem(one);
+                    if (leftover == null)
+                    {
+                        menu.heldItem.Stack -= movedFromHeldStack;
+                        if (menu.heldItem.Stack <= 0)
+                            menu.heldItem = null;
+                    }
+                }
+
+                if (playSound)
+                    Game1.playSound("coin");
+                return true;
+            }
+
+            if (!menu.showReceivingMenu)
+                return true;
+
+            if (slotIndex >= chestItems.Count || chestItems[slotIndex] == null)
+                return true;
+
+            Item item = chestItems[slotIndex]!;
+            if (item.Stack <= 1)
+            {
+                if (Game1.player.addItemToInventoryBool(item, false))
+                {
+                    chestItems.RemoveAt(slotIndex);
+                    if (playSound)
+                        Game1.playSound("coin");
+                }
+                return true;
+            }
+
+            Item oneItem = item.getOne();
+            int movedStack = Math.Max(1, Math.Min(oneItem.Stack, item.Stack));
+            if (Game1.player.addItemToInventoryBool(oneItem, false))
+            {
+                item.Stack -= movedStack;
+                if (item.Stack <= 0)
+                    chestItems.RemoveAt(slotIndex);
+                if (playSound)
+                    Game1.playSound("coin");
+            }
+
+            return true;
+        }
+
+        private static bool TryHandlePlayerInventoryLeftClick(
+            ItemGrabMenu menu,
+            Chest chest,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (menu.inventory == null)
+                return false;
+
+            if (menu.heldItem != null)
+            {
+                // Player-grid held-item placement does not need ItemGrabMenu's chest transfer
+                // logic, so this is safe and keeps normal slot swapping behavior.
+                Item? before = menu.heldItem;
+                menu.heldItem = menu.inventory.leftClick(x, y, menu.heldItem, playSound: false);
+                if (playSound && !ReferenceEquals(before, menu.heldItem))
+                    Game1.playSound("coin");
+                return true;
+            }
+
+            Item? item = menu.inventory.getItemAt(x, y);
+            if (item == null)
+                return true;
+
+            Game1.player.removeItemFromInventory(item);
+            Item? leftover = chest.addItem(item);
+            if (leftover != null)
+                Game1.player.addItemToInventory(leftover);
+
+            if (playSound)
+                Game1.playSound("coin");
+            return true;
+        }
+
+        private static bool TryHandlePlayerInventoryRightClick(
+            ItemGrabMenu menu,
+            Chest chest,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (menu.inventory == null)
+                return false;
+
+            if (menu.heldItem != null)
+            {
+                if (menu.heldItem.Stack <= 1)
+                {
+                    menu.heldItem = chest.addItem(menu.heldItem);
+                }
+                else
+                {
+                    Item one = menu.heldItem.getOne();
+                    int movedFromHeldStack = Math.Max(1, Math.Min(one.Stack, menu.heldItem.Stack));
+                    Item? leftover = chest.addItem(one);
+                    if (leftover == null)
+                    {
+                        menu.heldItem.Stack -= movedFromHeldStack;
+                        if (menu.heldItem.Stack <= 0)
+                            menu.heldItem = null;
+                    }
+                }
+
+                if (playSound)
+                    Game1.playSound("coin");
+                return true;
+            }
+
+            Item? item = menu.inventory.getItemAt(x, y);
+            if (item == null)
+                return true;
+
+            if (item.Stack <= 1)
+            {
+                Game1.player.removeItemFromInventory(item);
+                Item? leftover = chest.addItem(item);
+                if (leftover != null)
+                    Game1.player.addItemToInventory(leftover);
+                if (playSound)
+                    Game1.playSound("coin");
+                return true;
+            }
+
+            Item oneItem = item.getOne();
+            int movedStack = Math.Max(1, Math.Min(oneItem.Stack, item.Stack));
+            Item? returned = chest.addItem(oneItem);
+            if (returned == null)
+            {
+                item.Stack -= movedStack;
+                if (item.Stack <= 0)
+                    Game1.player.removeItemFromInventory(item);
+                if (playSound)
+                    Game1.playSound("coin");
+            }
+
+            return true;
+        }
+
+        private static IList<Item?> GetChestItems(ItemGrabMenu menu, Chest chest)
+        {
+            if (menu.ItemsToGrabMenu?.actualInventory is IList<Item?> nullableItems)
+                return nullableItems;
+
+            if (menu.ItemsToGrabMenu?.actualInventory != null)
+                return new ItemListAdapter(menu.ItemsToGrabMenu.actualInventory);
+
+            return new ItemListAdapter(chest.Items);
+        }
+
+        private sealed class ItemListAdapter : IList<Item?>
+        {
+            private readonly IList<Item> items;
+
+            public ItemListAdapter(IList<Item> items)
+            {
+                this.items = items;
+            }
+
+            public Item? this[int index]
+            {
+                get => this.items[index];
+                set => this.items[index] = value!;
+            }
+
+            public int Count => this.items.Count;
+            public bool IsReadOnly => this.items.IsReadOnly;
+            public void Add(Item? item) => this.items.Add(item!);
+            public void Clear() => this.items.Clear();
+            public bool Contains(Item? item) => item != null && this.items.Contains(item);
+            public void CopyTo(Item?[] array, int arrayIndex)
+            {
+                for (int i = 0; i < this.items.Count; i++)
+                    array[arrayIndex + i] = this.items[i];
+            }
+            public IEnumerator<Item?> GetEnumerator() => this.items.Cast<Item?>().GetEnumerator();
+            public int IndexOf(Item? item) => item == null ? -1 : this.items.IndexOf(item);
+            public void Insert(int index, Item? item) => this.items.Insert(index, item!);
+            public bool Remove(Item? item) => item != null && this.items.Remove(item);
+            public void RemoveAt(int index) => this.items.RemoveAt(index);
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        private static int GetInventorySlotIndex(InventoryMenu inventoryMenu, int x, int y)
+        {
+            if (inventoryMenu.inventory == null)
+                return -1;
+
+            for (int i = 0; i < inventoryMenu.inventory.Count; i++)
+            {
+                ClickableComponent? component = inventoryMenu.inventory[i];
+                if (component != null && component.containsPoint(x, y))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static bool IsPointInInventoryMenu(InventoryMenu? inventoryMenu, int x, int y)
+        {
+            if (inventoryMenu == null)
+                return false;
+
+            if (inventoryMenu.inventory != null)
+            {
+                foreach (var component in inventoryMenu.inventory)
+                {
+                    if (component != null && component.containsPoint(x, y))
+                        return true;
+                }
+            }
+
+            return ((IClickableMenu)inventoryMenu).isWithinBounds(x, y);
+        }
+
         private static bool MenuReceiveLeftClickPrefix(
             IClickableMenu __instance,
             int x,
@@ -2219,6 +2888,12 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             bool playSound
         )
         {
+            if (TryHandleScrollArrowMouseClick(__instance, x, y))
+                return false;
+
+            if (__instance is ItemGrabMenu itemGrabMenu && TryHandleChestManualLeftClick(itemGrabMenu, x, y, playSound))
+                return false;
+
             if (IsSideLayoutMenu(__instance) && __instance is not ItemGrabMenu)
                 ScheduleChestLayout(__instance, "receiveLeftClick", 1);
 
@@ -2237,13 +2912,32 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             return true;
         }
 
+        private static bool MenuReceiveRightClickPrefix(
+            IClickableMenu __instance,
+            int x,
+            int y,
+            bool playSound
+        )
+        {
+            if (__instance is ItemGrabMenu itemGrabMenu && TryHandleChestManualRightClick(itemGrabMenu, x, y, playSound))
+                return false;
+
+            return true;
+        }
+
         private static void MenuUpdatePostfix(IClickableMenu __instance, GameTime time)
         {
             ChestMenuLayoutState? state = null;
             if (IsSideLayoutMenu(__instance))
             {
                 state = GetChestLayoutState(__instance);
-                if (state.PendingLayoutPasses > 0)
+                if (__instance is ItemGrabMenu)
+                {
+                    // Item transfers in chest menus must not keep a pending relayout alive.
+                    // The cache handoff paths above handle real menu reconstruction immediately.
+                    state.PendingLayoutPasses = 0;
+                }
+                else if (state.PendingLayoutPasses > 0)
                 {
                     string reason = $"pending:{state.LastTrigger}";
                     state.PendingLayoutPasses--;
@@ -2281,14 +2975,96 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
         }
 
+        private static bool TryHandleScrollArrowMouseClick(IClickableMenu parentMenu, int x, int y)
+        {
+            foreach (var menu in GetKnownInventoryMenus(parentMenu))
+            {
+                if (!GridViewports.TryGetValue(menu, out GridViewport? grid) || grid == null)
+                    continue;
+
+                IList<Item>? items = RefreshInventorySource(menu, grid);
+                if (items == null)
+                    continue;
+
+                if (grid.UpArrow.containsPoint(x, y))
+                {
+                    if (grid.CanScroll(items, -1))
+                        grid.Scroll(items, -1);
+                    return true;
+                }
+
+                if (grid.DownArrow.containsPoint(x, y))
+                {
+                    if (grid.CanScroll(items, 1))
+                        grid.Scroll(items, 1);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryActivateSnappedScrollArrow(IClickableMenu parentMenu)
+        {
+            ClickableComponent? snapped = parentMenu.currentlySnappedComponent;
+            if (snapped == null)
+                return false;
+
+            foreach (var menu in GetKnownInventoryMenus(parentMenu))
+            {
+                if (!GridViewports.TryGetValue(menu, out GridViewport? grid) || grid == null)
+                    continue;
+
+                IList<Item>? items = RefreshInventorySource(menu, grid);
+                if (items == null)
+                    continue;
+
+                if (ReferenceEquals(snapped, grid.UpArrow) || IsScrollArrowByShape(snapped, ArrowIdUp, "Scroll Up"))
+                {
+                    if (grid.CanScroll(items, -1))
+                        grid.Scroll(items, -1);
+                    return true;
+                }
+
+                if (ReferenceEquals(snapped, grid.DownArrow) || IsScrollArrowByShape(snapped, ArrowIdDown, "Scroll Down"))
+                {
+                    if (grid.CanScroll(items, 1))
+                        grid.Scroll(items, 1);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsScrollArrowByShape(ClickableComponent component, int id, string name)
+        {
+            return component.myID == id || string.Equals(component.name, name, StringComparison.Ordinal);
+        }
+
         private static bool MenuReceiveGamePadButtonPrefix(
             IClickableMenu __instance,
-            Buttons button
+            Buttons button,
+            MethodBase __originalMethod
         )
         {
             if (__instance is ItemGrabMenu && button is (Buttons.A or Buttons.X or Buttons.Y or Buttons.B))
             {
-                Log.Debug($"[FIV/ChestInput] gamepad:{button}: menuHash={__instance.GetHashCode()}, snapped={DescribeComponent(__instance.currentlySnappedComponent)}, components={__instance.allClickableComponents?.Count ?? 0}");
+                LayoutDiagnostics.DebugChanged(
+                    $"ChestInput:gamepad:{button}:{RuntimeHelpers.GetHashCode(__instance)}:{DescribeComponent(__instance.currentlySnappedComponent)}:{__originalMethod.DeclaringType?.Name}.{__originalMethod.Name}",
+                    $"[FIV/ChestInput] gamepad:{button}: source={__originalMethod.DeclaringType?.Name}.{__originalMethod.Name}, menuHash={RuntimeHelpers.GetHashCode(__instance)}, snapped={DescribeComponent(__instance.currentlySnappedComponent)}, components={__instance.allClickableComponents?.Count ?? 0}");
+            }
+
+            if (IsBaseReceiveGamePadDispatchForItemGrabMenu(__instance, __originalMethod))
+                return true;
+
+            if (button is Buttons.A or Buttons.X)
+            {
+                if (TryActivateSnappedScrollArrow(__instance))
+                    return false;
+
+                if (__instance is ItemGrabMenu itemGrabMenu && TryHandleChestManualGamePadButton(itemGrabMenu, button))
+                    return false;
             }
 
             bool isDirectionalButton =

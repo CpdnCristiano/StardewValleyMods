@@ -203,12 +203,28 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         private static string GetLayoutButtonKey(ClickableComponent button)
         {
+            // This key is used only for remembering layout positions across menu rebuilds.
+            // Do not include myID here: vanilla and other mods may reuse -500/-1/default IDs
+            // or assign a different ID to the same visual button after new ItemGrabMenu(...).
+            // Use visual/semantic shape instead, and let the navigation code use IDs only
+            // when it actually wires neighbors.
+            string textureSignature = string.Empty;
+            string hoverText = string.Empty;
+            if (button is ClickableTextureComponent textureButton)
+            {
+                Rectangle source = textureButton.sourceRect;
+                textureSignature = $"{source.X},{source.Y},{source.Width},{source.Height}";
+                hoverText = textureButton.hoverText ?? string.Empty;
+            }
+
             return string.Join(
                 "|",
-                button.myID,
+                button.GetType().FullName ?? string.Empty,
                 button.name ?? string.Empty,
                 button.bounds.Width,
-                button.bounds.Height
+                button.bounds.Height,
+                textureSignature,
+                hoverText
             );
         }
 
