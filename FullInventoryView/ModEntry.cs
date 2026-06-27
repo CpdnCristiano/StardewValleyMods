@@ -2,6 +2,9 @@ using CpdnCristiano.StardewValleyMod.Common.Log;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
 using CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher;
 using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Config;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Integrations;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Api;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using Microsoft.Xna.Framework;
@@ -12,10 +15,14 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView;
 public class ModEntry : Mod
 {
     public static ModEntry Instance { get; private set; } = null!;
+    public static ModConfig Config { get; private set; } = new();
+
+    public override object GetApi() => new FullInventoryViewApi();
 
     public override void Entry(IModHelper helper)
     {
         Instance = this;
+        Config = helper.ReadConfig<ModConfig>();
         Log.Init(Monitor);
         var patches = new List<IPatcher> { new InventoryMenuPatcher(), new CustomBackpackFrameworkCompatPatcher() };
         if (Helper.ModRegistry.IsLoaded("Annosz.UiInfoSuite2"))
@@ -28,11 +35,71 @@ public class ModEntry : Mod
         }
         HarmonyPatcher.Apply(this, patches.ToArray());
         helper.Events.Display.MenuChanged += this.OnMenuChanged;
+        helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
 
         helper.ConsoleCommands.Add(
             "fit_size",
             "Altera o tamanho máximo do inventário do jogador. Exemplo: fit_size 60",
             this.SetInventorySize
+        );
+    }
+
+
+
+    private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
+    {
+        RegisterGenericModConfigMenu();
+    }
+
+    private void RegisterGenericModConfigMenu()
+    {
+        var configMenu = Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>(
+            "spacechase0.GenericModConfigMenu"
+        );
+        if (configMenu == null)
+            return;
+
+        configMenu.Register(
+            ModManifest,
+            reset: () => Config = new ModConfig(),
+            save: () => Helper.WriteConfig(Config)
+        );
+
+        configMenu.AddSectionTitle(
+            ModManifest,
+            text: () => Helper.Translation.Get("config.section.gamepad")
+        );
+
+        configMenu.AddBoolOption(
+            ModManifest,
+            getValue: () => Config.EnableInventoryPageGamepadEdgeScroll,
+            setValue: value => Config.EnableInventoryPageGamepadEdgeScroll = value,
+            name: () => Helper.Translation.Get("config.inventory-page-gamepad-edge-scroll.name"),
+            tooltip: () => Helper.Translation.Get("config.inventory-page-gamepad-edge-scroll.tooltip"),
+            fieldId: nameof(ModConfig.EnableInventoryPageGamepadEdgeScroll)
+        );
+
+        configMenu.AddSectionTitle(
+            ModManifest,
+            text: () => Helper.Translation.Get("config.section.compatibility")
+        );
+
+        configMenu.AddBoolOption(
+            ModManifest,
+            getValue: () => Config.EnableRemoteFridgeStorageCompatPatch,
+            setValue: value => Config.EnableRemoteFridgeStorageCompatPatch = value,
+            name: () => Helper.Translation.Get("config.remote-fridge-storage-compat.name"),
+            tooltip: () => Helper.Translation.Get("config.remote-fridge-storage-compat.tooltip"),
+            fieldId: nameof(ModConfig.EnableRemoteFridgeStorageCompatPatch)
+        );
+
+        configMenu.AddBoolOption(
+            ModManifest,
+            getValue: () => Config.EnableBetterGameMenuInventoryPagePositionPatch,
+            setValue: value => Config.EnableBetterGameMenuInventoryPagePositionPatch = value,
+            name: () => Helper.Translation.Get("config.better-game-menu-inventory-page-position.name"),
+            tooltip: () => Helper.Translation.Get("config.better-game-menu-inventory-page-position.tooltip"),
+            fieldId: nameof(ModConfig.EnableBetterGameMenuInventoryPagePositionPatch)
         );
     }
 

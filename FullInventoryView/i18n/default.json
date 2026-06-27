@@ -1,0 +1,10 @@
+{
+  "config.section.gamepad": "Controller",
+  "config.inventory-page-gamepad-edge-scroll.name": "Gamepad backpack scrolling",
+  "config.inventory-page-gamepad-edge-scroll.tooltip": "Enabled: on the Inventory page, pressing past the last visible backpack row scrolls the backpack. This can make accessory changes harder with large backpacks. Chests and shops are unchanged.",
+  "config.section.compatibility": "Compatibility",
+  "config.remote-fridge-storage-compat.name": "Remote Fridge Storage controller proxy",
+  "config.remote-fridge-storage-compat.tooltip": "Enabled: when Remote Fridge Storage is loaded, Full Inventory View adds a controller-navigation proxy over the mod's own fridge toggle. The original Remote Fridge Storage button position and click behavior are not changed.",
+  "config.better-game-menu-inventory-page-position.name": "Better Game Menu InventoryPage height",
+  "config.better-game-menu-inventory-page-position.tooltip": "Enabled: when Better Game Menu is loaded, Full Inventory View shifts its Inventory tab upward so expanded backpacks start at the same vertical offset as the vanilla GameMenu."
+}

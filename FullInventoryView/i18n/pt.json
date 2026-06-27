@@ -1,0 +1,10 @@
+{
+  "config.section.gamepad": "Controle",
+  "config.inventory-page-gamepad-edge-scroll.name": "Rolar mochila no controle",
+  "config.inventory-page-gamepad-edge-scroll.tooltip": "Ativado: no Inventário, o direcional rola a mochila ao passar da última linha visível. Pode dificultar trocar acessórios em mochilas grandes. Baús e lojas não mudam.",
+  "config.section.compatibility": "Compatibilidade",
+  "config.remote-fridge-storage-compat.name": "Proxy de controle para Remote Fridge Storage",
+  "config.remote-fridge-storage-compat.tooltip": "Ativado: quando o Remote Fridge Storage estiver carregado, o Full Inventory View adiciona um proxy de navegação por controle por cima do botão original da geladeira. A posição e o clique original do Remote Fridge Storage não são alterados.",
+  "config.better-game-menu-inventory-page-position.name": "Altura do inventário no Better Game Menu",
+  "config.better-game-menu-inventory-page-position.tooltip": "Ativado: quando o Better Game Menu estiver carregado, o Full Inventory View sobe a aba de Inventário para que mochilas expandidas comecem na mesma altura do GameMenu vanilla."
+}

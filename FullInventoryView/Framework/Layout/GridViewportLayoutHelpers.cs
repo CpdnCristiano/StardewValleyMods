@@ -1,10 +1,26 @@
 using Microsoft.Xna.Framework;
+using CpdnCristiano.StardewValleyMod.Common.Log;
 using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 {
     internal static class GridViewportLayoutHelpers
     {
+        private const int DropItemInvisibleButtonId = 107;
+        private const int StardewDefaultProtectedButtonId = -500;
+
+        public static bool IsProtectedComponent(ClickableComponent? component)
+        {
+            return component?.myID == DropItemInvisibleButtonId
+                || component?.myID == StardewDefaultProtectedButtonId;
+        }
+
+        public static bool IsProtectedComponentId(int componentId)
+        {
+            return componentId == DropItemInvisibleButtonId
+                || componentId == StardewDefaultProtectedButtonId;
+        }
+
         public static bool BoundsOverlapHorizontally(Rectangle a, Rectangle b, int tolerance)
         {
             return a.Right >= b.Left - tolerance && a.Left <= b.Right + tolerance;
@@ -12,22 +28,58 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public static void SetUpNeighbor(ClickableComponent component, int neighborId)
         {
+            if (IsProtectedComponent(component) || IsProtectedComponentId(neighborId))
+                return;
             component.upNeighborID = neighborId;
         }
 
         public static void SetDownNeighbor(ClickableComponent component, int neighborId)
         {
+            if (IsProtectedComponent(component) || IsProtectedComponentId(neighborId))
+                return;
             component.downNeighborID = neighborId;
         }
 
         public static void SetLeftNeighbor(ClickableComponent component, int neighborId)
         {
+            if (IsProtectedComponent(component) || IsProtectedComponentId(neighborId))
+                return;
             component.leftNeighborID = neighborId;
         }
 
         public static void SetRightNeighbor(ClickableComponent component, int neighborId)
         {
+            if (IsProtectedComponent(component) || IsProtectedComponentId(neighborId))
+                return;
             component.rightNeighborID = neighborId;
+        }
+
+        public static void SetBounds(ClickableComponent component, Rectangle bounds)
+        {
+            if (IsProtectedComponent(component))
+                return;
+            component.bounds = bounds;
+        }
+
+        public static void SetBoundsX(ClickableComponent component, int x)
+        {
+            if (IsProtectedComponent(component))
+                return;
+            component.bounds.X = x;
+        }
+
+        public static void SetBoundsY(ClickableComponent component, int y)
+        {
+            if (IsProtectedComponent(component))
+                return;
+            component.bounds.Y = y;
+        }
+
+        public static void OffsetBoundsX(ClickableComponent component, int deltaX)
+        {
+            if (IsProtectedComponent(component))
+                return;
+            component.bounds.X += deltaX;
         }
 
         public static void WireSideColumnNavigation(
@@ -35,22 +87,24 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             List<ClickableComponent> buttonColumn,
             List<ClickableComponent> bottomComponents,
             int startingDynamicId,
-            bool columnIsOnLeft
+            bool columnIsOnLeft,
+            bool wrapOutwardToDrop = false
         )
         {
-            WireSideColumnsNavigation(slotColumn, buttonColumn, startingDynamicId, columnIsOnLeft);
+            WireSideColumnsNavigation(slotColumn, buttonColumn, startingDynamicId, columnIsOnLeft, wrapOutwardToDrop);
         }
 
         public static void WireSideColumnsNavigation(
             List<ClickableComponent> slotColumn,
             List<ClickableComponent> sideButtons,
             int startingDynamicId,
-            bool buttonsAreOnLeft
+            bool buttonsAreOnLeft,
+            bool wrapOutwardToDrop = false
         )
         {
-            slotColumn = slotColumn.Where(c => c != null).Distinct().ToList();
+            slotColumn = slotColumn.Where(c => c != null && !IsProtectedComponent(c)).Distinct().ToList();
             sideButtons = sideButtons
-                .Where(c => c != null)
+                .Where(c => c != null && !IsProtectedComponent(c))
                 .Distinct()
                 .OrderBy(c => c.bounds.Center.X)
                 .ThenBy(c => c.bounds.Center.Y)
@@ -60,10 +114,25 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 return;
 
             int dynamicId = startingDynamicId;
+            var usedIds = new HashSet<int>(slotColumn
+                .Select(c => c.myID)
+                .Where(id => id >= 0));
             foreach (var comp in sideButtons)
             {
-                if (comp.myID == -1)
+                bool invalidOrSentinelId = comp.myID < 0;
+                bool idAlreadyOwned = comp.myID >= 0 && usedIds.Contains(comp.myID);
+
+                // Directional gamepad navigation resolves neighbors by myID, so any unassigned
+                // non-protected side button that passed our filters gets a stable positive dynamic ID.
+                // Protected components (107 and -500) were filtered out before this point.
+                if (invalidOrSentinelId || idAlreadyOwned)
+                {
+                    while (usedIds.Contains(dynamicId))
+                        dynamicId++;
                     comp.myID = dynamicId++;
+                }
+
+                usedIds.Add(comp.myID);
             }
 
             var columns = GroupColumns(sideButtons, 24);
@@ -92,6 +161,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                     if (closestSlot != null)
                         SetLeftNeighbor(comp, closestSlot.myID);
                 }
+                else if (wrapOutwardToDrop)
+                {
+                    // InventoryPage-only 360 wrap. ItemGrabMenu must keep its native drop
+                    // area behavior and must not have side buttons force-linked to 107.
+                    SetLeftNeighbor(comp, DropItemInvisibleButtonId);
+                    Log.Debug($"[FIV/NavGraph] inventory-page outward wrap left -> drop: button={GridViewport.DescribeComponent(comp)}");
+                }
 
                 if (rightButton != null)
                     SetRightNeighbor(comp, rightButton.myID);
@@ -100,6 +176,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                     var closestSlot = FindClosestByY(slotColumn, comp.bounds.Center.Y);
                     if (closestSlot != null)
                         SetRightNeighbor(comp, closestSlot.myID);
+                }
+                else if (wrapOutwardToDrop)
+                {
+                    // InventoryPage-only 360 wrap. ItemGrabMenu must keep its native drop
+                    // area behavior and must not have side buttons force-linked to 107.
+                    SetRightNeighbor(comp, DropItemInvisibleButtonId);
+                    Log.Debug($"[FIV/NavGraph] inventory-page outward wrap right -> drop: button={GridViewport.DescribeComponent(comp)}");
                 }
             }
 
@@ -221,6 +304,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             {
                 if (component == null)
                     continue;
+                if (IsProtectedComponent(component))
+                    continue;
+                if (IsDropAreaComponent(menu, component))
+                    continue;
                 if (component == upArrow || component == downArrow || component == excludedButton)
                     continue;
                 if (component == menu.upperRightCloseButton || component.name == "upperRightCloseButton")
@@ -236,6 +323,21 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             }
 
             return alignedButtons.Distinct().OrderBy(component => component.bounds.Center.Y).ToList();
+        }
+
+        private static bool IsDropAreaComponent(IClickableMenu menu, ClickableComponent component)
+        {
+            if (component == null)
+                return false;
+
+            if (IsProtectedComponent(component))
+                return true;
+
+            if (menu is MenuWithInventory menuWithInventory
+                && ReferenceEquals(component, menuWithInventory.dropItemInvisibleButton))
+                return true;
+
+            return false;
         }
 
         public static List<ClickableComponent> FindChestColumnButtons(
@@ -263,6 +365,10 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             foreach (var component in menu.allClickableComponents)
             {
                 if (component == null)
+                    continue;
+                if (IsProtectedComponent(component))
+                    continue;
+                if (IsDropAreaComponent(menu, component))
                     continue;
                 if (IsUnidentifiedNonVisualComponent(component))
                     continue;
@@ -294,13 +400,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         private static bool IsUnidentifiedNonVisualComponent(ClickableComponent component)
         {
-            // -500 is a default/unassigned component ID in Stardew menus. By itself it is not
-            // a button identity. Only skip it when the component also has no visual texture and
-            // no name, which matches the invisible helper/drop-area components that should not
-            // be moved as side buttons.
-            return component.myID == -500
-                && component is not ClickableTextureComponent
-                && string.IsNullOrWhiteSpace(component.name);
+            return IsProtectedComponent(component);
         }
     }
 }

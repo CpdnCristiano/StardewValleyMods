@@ -2,11 +2,17 @@ using System.Reflection;
 using System.Reflection.Emit;
 using CpdnCristiano.StardewValleyMod.Common.Log;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
 using HarmonyLib;
 using StardewModdingAPI;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
+    /// <summary>
+    /// UI Info Suite 2 compatibility is intentionally height-only.
+    /// Its buttons are already positioned by the mod; FIV only teaches it that the
+    /// game menu is taller when the backpack has extra visible rows.
+    /// </summary>
     internal class UiInfo2Patcher : BasePatcher
     {
         public override void Apply(Harmony harmony, IMonitor monitor)
@@ -16,7 +22,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             );
             if (original is null)
             {
-                Log.Warn("Could not find UIInfoSuite2 DrawBillboard method; skipping patch.");
+                Log.Warn("Could not find UIInfoSuite2 DrawBillboard method; skipping height patch.");
                 return;
             }
             harmony.Patch(
@@ -47,8 +53,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                         new CodeInstruction(
                             OpCodes.Call,
                             AccessTools.Method(
-                                typeof(InventoryMenuPatcher),
-                                nameof(InventoryMenuPatcher.GetExtraHeight)
+                                typeof(InventoryGridMetrics),
+                                nameof(InventoryGridMetrics.GetExtraHeight)
                             )
                         )
                     );

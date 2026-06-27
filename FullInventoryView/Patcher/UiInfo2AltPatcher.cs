@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using CpdnCristiano.StardewValleyMod.Common.Log;
 using CpdnCristiano.StardewValleyMod.Common.Patching;
+using CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout;
 using HarmonyLib;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
@@ -9,6 +10,11 @@ using StardewValley.Menus;
 
 namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
 {
+    /// <summary>
+    /// UI Info Suite 2 Alternative compatibility is intentionally height-only.
+    /// Its own button layout stays intact; FIV only includes the expanded menu height
+    /// so the calendar/billboard button remains attached to the correct bottom edge.
+    /// </summary>
     internal class UiInfo2AltPatcher : BasePatcher
     {
         public override void Apply(Harmony harmony, IMonitor monitor)
@@ -26,7 +32,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
             }
             else
             {
-                Log.Warn("Could not find UIInfoSuite2Alt ComputeBoundsAndDrawIcons method; skipping offset patch.");
+                Log.Warn("Could not find UIInfoSuite2Alt ComputeBoundsAndDrawIcons method; skipping height patch.");
             }
 
 
@@ -76,8 +82,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Patcher
                                         new CodeInstruction(
                                             OpCodes.Call,
                                             AccessTools.Method(
-                                                typeof(InventoryMenuPatcher),
-                                                nameof(InventoryMenuPatcher.GetExtraHeight)
+                                                typeof(InventoryGridMetrics),
+                                                nameof(InventoryGridMetrics.GetExtraHeight)
                                             )
                                         )
                                     );

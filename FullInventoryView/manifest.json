@@ -1,7 +1,7 @@
 {
   "Name": "Full Inventory View",
   "Author": "CpdnCristiano",
-  "Version": "1.6.2",
+  "Version": "1.6.3",
   "MinimumApiVersion": "4.1.10",
   "Description": "This mod improves expanded inventory layouts with a cleaner scrollable view for large inventories.",
   "UniqueID": "CpdnCristiano.FullInventoryView",
@@ -12,6 +12,10 @@
   "Dependencies": [
     {
       "UniqueID": "platinummyr.CustomBackpackFramework",
+      "IsRequired": false
+    },
+    {
+      "UniqueID": "spacechase0.GenericModConfigMenu",
       "IsRequired": false
     }
   ]

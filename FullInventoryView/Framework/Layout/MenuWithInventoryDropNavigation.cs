@@ -8,28 +8,53 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
         public static void Preserve(IClickableMenu menu, IEnumerable<InventoryMenu> inventoryMenus)
         {
+            // ItemGrabMenu has its own vanilla drop-area wiring. Do not rewrite the
+            // invisible drop target there: the button must keep its original bounds and
+            // native neighbor behavior. InventoryPage keeps the wrap behavior only in
+            // the inventory screen, where vanilla already supports the 360 loop.
+            if (menu is ItemGrabMenu)
+                return;
+
             if (menu is not MenuWithInventory menuWithInventory)
                 return;
 
             var dropButton = menuWithInventory.dropItemInvisibleButton;
-            if (dropButton == null)
+            if (dropButton == null || GridViewportLayoutHelpers.IsProtectedComponent(dropButton))
                 return;
+
+            var orderedMenus = inventoryMenus
+                .Where(m => m?.inventory != null && m.inventory.Count > 0)
+                .OrderBy(m => m.yPositionOnScreen)
+                .ToList();
+            if (orderedMenus.Count == 0)
+                return;
+
+            // In ItemGrabMenu there are two grids: chest/top first, player/bottom second.
+            // The invisible drop target belongs to the item-grab surface, and Stardew's
+            // controller loop expects RIGHT from the drop target to return to the first
+            // chest slot, not to a lower player/backpack slot or a side button from the
+            // previous wrap. Keep this rule centralized so InventoryPage and ItemGrabMenu
+            // don't drift into two different navigation models.
+            ClickableComponent primaryReturnSlot = orderedMenus[0].inventory[0];
 
             dropButton.myID = DropItemInvisibleButtonId;
             menu.allClickableComponents ??= new List<ClickableComponent>();
             if (!menu.allClickableComponents.Contains(dropButton))
                 menu.allClickableComponents.Add(dropButton);
 
-            foreach (var inventoryMenu in inventoryMenus.Where(m => m?.inventory != null))
+            foreach (var inventoryMenu in orderedMenus)
             {
-                PreserveForInventoryMenu(menu, inventoryMenu, dropButton);
+                PreserveForInventoryMenu(menu, inventoryMenu, dropButton, primaryReturnSlot);
             }
+
+            GridViewportLayoutHelpers.SetRightNeighbor(dropButton, primaryReturnSlot.myID);
         }
 
         private static void PreserveForInventoryMenu(
             IClickableMenu menu,
             InventoryMenu inventoryMenu,
-            ClickableComponent dropButton
+            ClickableComponent dropButton,
+            ClickableComponent primaryReturnSlot
         )
         {
             var slots = inventoryMenu.inventory?.Where(c => c != null).ToList();
@@ -41,15 +66,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
             if (leftSideButtons.Count > 0)
             {
-                WireDropThroughLeftSideButtons(dropButton, firstSlot, leftSideButtons);
+                WireDropThroughLeftSideButtons(dropButton, firstSlot, leftSideButtons, primaryReturnSlot);
                 return;
             }
 
             // Vanilla maps the first inventory slot directly to the invisible drop target.
             // Keep that behavior whenever there is no left-side scroll/button column between
             // the slot and the drop area.
-            firstSlot.leftNeighborID = dropButton.myID;
-            dropButton.rightNeighborID = firstSlot.myID;
+            GridViewportLayoutHelpers.SetLeftNeighbor(firstSlot, dropButton.myID);
+            GridViewportLayoutHelpers.SetRightNeighbor(dropButton, primaryReturnSlot.myID);
         }
 
         private static List<ClickableComponent> FindLeftSideButtons(
@@ -70,6 +95,7 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
                 .allClickableComponents
                 .Where(c =>
                     c != null
+                    && !GridViewportLayoutHelpers.IsProtectedComponent(c)
                     && c != dropButton
                     && !slotSet.Contains(c)
                     && c != menu.upperRightCloseButton
@@ -88,9 +114,15 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
         private static void WireDropThroughLeftSideButtons(
             ClickableComponent dropButton,
             ClickableComponent firstSlot,
-            List<ClickableComponent> leftSideButtons
+            List<ClickableComponent> leftSideButtons,
+            ClickableComponent primaryReturnSlot
         )
         {
+            leftSideButtons = leftSideButtons
+                .Where(button => button != null && !GridViewportLayoutHelpers.IsProtectedComponent(button))
+                .Distinct()
+                .ToList();
+
             foreach (var button in leftSideButtons)
             {
                 if (button.myID == -1)
@@ -103,8 +135,8 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
 
             if (outerLeftColumn == null || outerLeftColumn.Count == 0)
             {
-                firstSlot.leftNeighborID = dropButton.myID;
-                dropButton.rightNeighborID = firstSlot.myID;
+                GridViewportLayoutHelpers.SetLeftNeighbor(firstSlot, dropButton.myID);
+                GridViewportLayoutHelpers.SetRightNeighbor(dropButton, primaryReturnSlot.myID);
                 return;
             }
 
@@ -115,13 +147,13 @@ namespace CpdnCristiano.StardewValleyMod.FullInventoryView.Framework.Layout
             // instead of letting the side column swallow access to the drop area.
             foreach (var button in outerLeftColumn)
             {
-                button.leftNeighborID = dropButton.myID;
+                GridViewportLayoutHelpers.SetLeftNeighbor(button, dropButton.myID);
             }
 
-            var returnTarget = FindClosestByY(outerLeftColumn, dropButton.bounds.Center.Y)
-                ?? FindClosestByY(leftSideButtons, firstSlot.bounds.Center.Y)
-                ?? firstSlot;
-            dropButton.rightNeighborID = returnTarget.myID;
+            // Do not point the drop target back to the side-column button that sent us here.
+            // RIGHT from the invisible drop target must always return to the primary slot 0
+            // chosen by Preserve(), otherwise the 360 wrap feels reversed.
+            GridViewportLayoutHelpers.SetRightNeighbor(dropButton, primaryReturnSlot.myID);
         }
 
         private static List<List<ClickableComponent>> GroupColumns(
